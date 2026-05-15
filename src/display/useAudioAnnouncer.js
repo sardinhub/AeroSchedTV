@@ -7,9 +7,9 @@ export function useAudioAnnouncer(schedules) {
   // Fungsi untuk membuka blokir suara dari browser
   const enableAudio = () => {
     if ('speechSynthesis' in window) {
-      const msg = new SpeechSynthesisUtterance('Sistem suara AeroSched aktif');
+      const msg = new SpeechSynthesisUtterance('Sistem suara telah diaktifkan.');
       msg.lang = 'id-ID';
-      msg.volume = 0; // Suara inisial dibisukan
+      msg.volume = 1; // Suara dikeraskan agar bisa dites
       window.speechSynthesis.speak(msg);
     }
     setAudioEnabled(true);
