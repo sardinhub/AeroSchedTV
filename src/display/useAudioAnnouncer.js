@@ -6,35 +6,40 @@ export function useAudioAnnouncer(schedules) {
 
   // Fungsi untuk memutar suara (Pintar: Bisa deteksi TV tanpa suara)
   const speak = (text, onEndCallback = null) => {
-    // 1. Putar Nada Dering (Bel) dulu agar TV "terbangun"
+    // 1. Siapkan Nada Dering (Bel)
     const chime = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    chime.volume = 0.5;
-    chime.play().catch(() => {});
+    chime.volume = 0.6;
 
-    // 2. Cek apakah browser punya mesin suara (Laptop/HP biasanya punya)
-    const synth = window.speechSynthesis;
-    const voices = synth ? synth.getVoices() : [];
+    // 2. Definisi fungsi bicara (akan dipanggil SETELAH Bel selesai)
+    const startSpeaking = () => {
+      const synth = window.speechSynthesis;
+      // Berikan jeda sedikit agar voices sempat loading di TV
+      const voices = synth ? synth.getVoices() : [];
 
-    if (synth && voices.length > 0) {
-      // PAKAI SUARA LOKAL (Laptop/HP)
-      synth.cancel();
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = 'id-ID';
-      msg.rate = 0.9;
-      if (onEndCallback) msg.onend = onEndCallback;
-      synth.speak(msg);
-      if (synth.paused) synth.resume();
-    } else {
-      // PAKAI SUARA CLOUD (Khusus Smart TV yang tidak punya suara bawaan)
-      // Menggunakan server cadangan Youdao yang sangat stabil
-      const cloudUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=id`;
-      const audio = new Audio(cloudUrl);
-      if (onEndCallback) audio.onended = onEndCallback;
-      audio.play().catch(e => {
-        console.error("Semua sistem suara gagal di TV ini", e);
-        if (onEndCallback) onEndCallback();
-      });
-    }
+      if (synth && voices.length > 0) {
+        // PAKAI SUARA LOKAL (Laptop/HP)
+        synth.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'id-ID';
+        msg.rate = 0.9;
+        if (onEndCallback) msg.onend = onEndCallback;
+        synth.speak(msg);
+        if (synth.paused) synth.resume();
+      } else {
+        // PAKAI SUARA CLOUD GOOGLE (Khusus Smart TV)
+        const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
+        const audio = new Audio(googleUrl);
+        if (onEndCallback) audio.onended = onEndCallback;
+        audio.play().catch(e => {
+          console.error("Gagal total suara di TV", e);
+          if (onEndCallback) onEndCallback();
+        });
+      }
+    };
+
+    // Jalankan Bel, lalu setelah selesai baru jalankan suara orang
+    chime.onended = startSpeaking;
+    chime.play().catch(() => startSpeaking()); // Jika bel gagal, langsung suara orang
   };
 
   const enableAudio = () => {
