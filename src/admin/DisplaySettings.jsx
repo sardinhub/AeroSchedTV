@@ -5,7 +5,10 @@ export default function DisplaySettings() {
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState({
     carousel_interval_seconds: 8,
-    ticker_text: 'Selamat Datang di Triesakti Institute of Airlines'
+    ticker_text: 'Selamat Datang di Triesakti Institute of Airlines',
+    indonesia_raya_time: '21:48',
+    sholat_dzuhur_time: '12:10',
+    sholat_ashar_time: '15:20'
   });
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -42,7 +45,7 @@ export default function DisplaySettings() {
   return (
     <div className="display-settings">
       <h2 className="section-title">Pengaturan Tampilan TV</h2>
-      <p className="section-sub">Atur kecepatan transisi jadwal dan teks pengumuman bawah layar.</p>
+      <p className="section-sub">Atur kecepatan transisi jadwal, pengumuman, dan jam-jam penting lainnya.</p>
 
       {message.text && (
         <div className={`alert alert-${message.type}`}>
@@ -64,6 +67,36 @@ export default function DisplaySettings() {
                 onChange={e => setSettings({...settings, carousel_interval_seconds: parseInt(e.target.value)})}
               />
               <span className="photo-upload-hint">Waktu tunggu sebelum slide jadwal berikutnya bergeser.</span>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">Jam Video Indonesia Raya</label>
+              <input 
+                type="time" 
+                className="form-input" 
+                value={settings.indonesia_raya_time}
+                onChange={e => setSettings({...settings, indonesia_raya_time: e.target.value})}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">Jam Pengumuman Dzuhur</label>
+              <input 
+                type="time" 
+                className="form-input" 
+                value={settings.sholat_dzuhur_time}
+                onChange={e => setSettings({...settings, sholat_dzuhur_time: e.target.value})}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">Jam Pengumuman Ashar</label>
+              <input 
+                type="time" 
+                className="form-input" 
+                value={settings.sholat_ashar_time}
+                onChange={e => setSettings({...settings, sholat_ashar_time: e.target.value})}
+              />
             </div>
 
             <div className="form-field full-width">

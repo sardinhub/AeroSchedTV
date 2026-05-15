@@ -16,42 +16,59 @@ export default function DisplayPage() {
   const [showUpdateToast, setShowUpdateToast] = useState(false);
   const [showIndonesiaRaya, setShowIndonesiaRaya] = useState(false);
   const indonesiaRayaTriggered = useRef(false);
+  const sholatTriggered = useRef(new Set());
 
   // Pasang sistem suara
   const { audioEnabled, enableAudio, speak } = useAudioAnnouncer(schedules);
 
-  // Effect Khusus Indonesia Raya 21:48 WITA
+  // Effect Khusus Jam Penting (Indonesia Raya & Waktu Sholat)
   useEffect(() => {
     const checkTime = setInterval(() => {
       const now = new Date();
-      // Mengambil waktu lokal TV (pastikan jam dan zona waktu TV sudah benar)
-      const h = now.getHours();
-      const m = now.getMinutes();
+      const h = now.getHours().toString().padStart(2, '0');
+      const m = now.getMinutes().toString().padStart(2, '0');
       const s = now.getSeconds();
+      const currentTimeStr = `${h}:${m}`;
 
       // Reset trigger tiap pergantian hari (jam 00:00)
-      if (h === 0 && m === 0) indonesiaRayaTriggered.current = false;
+      if (h === '00' && m === '00') {
+        indonesiaRayaTriggered.current = false;
+        sholatTriggered.current.clear();
+      }
 
-      // Pemicu tepat jam 21:48:00
-      if (h === 21 && m === 48 && s === 0 && !indonesiaRayaTriggered.current) {
+      // 1. PICU INDONESIA RAYA (Berdasarkan Pengaturan)
+      if (currentTimeStr === (settings.indonesia_raya_time || '21:48') && s === 0 && !indonesiaRayaTriggered.current) {
         indonesiaRayaTriggered.current = true;
-        
         if (audioEnabled) {
            speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", 'next', () => {
              setShowIndonesiaRaya(true);
            });
-           
-           // Backup jika sinyal suara nyangkut (muncul paksa setelah 12 detik)
            setTimeout(() => setShowIndonesiaRaya(true), 12000);
         } else {
-           // Langsung muncul jika audio blm diaktifkan user
            setShowIndonesiaRaya(true);
         }
       }
+
+      // 2. PICU DZUHUR (Berdasarkan Pengaturan)
+      if (currentTimeStr === (settings.sholat_dzuhur_time || '12:10') && s === 0 && !sholatTriggered.current.has('dzuhur')) {
+        sholatTriggered.current.add('dzuhur');
+        if (audioEnabled) {
+          speak("DISAMPAIKAN KEPADA KAUM MUSLIMIN DAN MUSLIMAT BAHWA WAKTU SHOLAT DZUHUR TELAH TIBA ... TERIMA KASIH", 'active');
+        }
+      }
+
+      // 3. PICU ASHAR (Berdasarkan Pengaturan)
+      if (currentTimeStr === (settings.sholat_ashar_time || '15:20') && s === 0 && !sholatTriggered.current.has('ashar')) {
+        sholatTriggered.current.add('ashar');
+        if (audioEnabled) {
+          speak("DISAMPAIKAN KEPADA KAUM MUSLIMIN DAN MUSLIMAT BAHWA WAKTU SHOLAT ASHAR TELAH TIBA ... TERIMA KASIH", 'active');
+        }
+      }
+
     }, 1000);
 
     return () => clearInterval(checkTime);
-  }, [audioEnabled, speak]);
+  }, [audioEnabled, speak, settings]);
 
   // Efek untuk mematikan video persis di durasi 1 menit 58 detik (118.000 ms)
   useEffect(() => {
