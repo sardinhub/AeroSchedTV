@@ -4,14 +4,30 @@ export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set()); // Mencatat jadwal yg sudah diumumkan agar tidak looping suara
 
+  // Fungsi Text-To-Speech menggunakan Google TTS (100% Kompatibel dengan Smart TV)
+  const speak = (text, onEndCallback = null) => {
+    try {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
+      const audio = new Audio(url);
+      audio.volume = 1;
+      
+      if (onEndCallback) {
+        audio.onended = onEndCallback;
+      }
+      
+      audio.play().catch(err => {
+        console.error("Gagal memutar suara di TV:", err);
+        if (onEndCallback) onEndCallback(); // Lanjut aksi walau audio gagal
+      });
+    } catch (err) {
+      console.error(err);
+      if (onEndCallback) onEndCallback();
+    }
+  };
+
   // Fungsi untuk membuka blokir suara dari browser
   const enableAudio = () => {
-    if ('speechSynthesis' in window) {
-      const msg = new SpeechSynthesisUtterance('Sistem suara telah diaktifkan.');
-      msg.lang = 'id-ID';
-      msg.volume = 1; // Suara dikeraskan agar bisa dites
-      window.speechSynthesis.speak(msg);
-    }
+    speak('Sistem suara telah diaktifkan.');
     setAudioEnabled(true);
   };
 
@@ -20,7 +36,6 @@ export function useAudioAnnouncer(schedules) {
 
     const checkSchedules = () => {
       const now = new Date();
-      // Ambil waktu sistem dalam format menit untuk memudahkan perhitungan
       const currentTime = now.getHours() * 60 + now.getMinutes();
       const currentDay = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Makassar' }).format(now).toLowerCase();
 
@@ -38,7 +53,7 @@ export function useAudioAnnouncer(schedules) {
         const course = s.course_name || 'mata kuliah';
         const kelas = s.class_type === 'garuda' ? 'Kelas Garuda' : 'Kelas Citilink';
 
-        // 1. SUARA SAAT JADWAL DIMULAI (Berlangsung)
+        // 1. SUARA SAAT JADWAL DIMULAI
         if (currentTime === startTime && !announcedRef.current.has(`${s.id}-start`)) {
           speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`);
           announcedRef.current.add(`${s.id}-start`);
@@ -50,7 +65,7 @@ export function useAudioAnnouncer(schedules) {
           announcedRef.current.add(`${s.id}-end10`);
         }
 
-        // 3. SUARA JADWAL BERIKUTNYA (Diumumkan 5 Menit sebelum jam mulai)
+        // 3. SUARA JADWAL BERIKUTNYA
         if (currentTime === startTime - 5 && !announcedRef.current.has(`${s.id}-next5`)) {
           speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`);
           announcedRef.current.add(`${s.id}-next5`);
@@ -58,22 +73,9 @@ export function useAudioAnnouncer(schedules) {
       });
     };
 
-    // Cek waktu sistem setiap 10 detik
     const timer = setInterval(checkSchedules, 10000);
     return () => clearInterval(timer);
   }, [schedules, audioEnabled]);
 
-  // Fungsi Text-To-Speech (Robot Pembaca Teks)
-  const speak = (text) => {
-    if (!('speechSynthesis' in window)) return;
-    
-    const msg = new SpeechSynthesisUtterance(text);
-    msg.lang = 'id-ID'; // Logat Bahasa Indonesia
-    msg.rate = 0.85;    // Kecepatan baca sedikit diperlambat agar jelas
-    msg.pitch = 1;      // Nada normal
-    
-    window.speechSynthesis.speak(msg);
-  };
-
-  return { audioEnabled, enableAudio };
+  return { audioEnabled, enableAudio, speak };
 }

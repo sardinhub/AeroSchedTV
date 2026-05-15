@@ -17,7 +17,7 @@ export default function DisplayPage() {
   const indonesiaRayaTriggered = useRef(false);
 
   // Pasang sistem suara
-  const { audioEnabled, enableAudio } = useAudioAnnouncer(schedules);
+  const { audioEnabled, enableAudio, speak } = useAudioAnnouncer(schedules);
 
   // Effect Khusus Indonesia Raya 21:48 WITA
   useEffect(() => {
@@ -35,16 +35,10 @@ export default function DisplayPage() {
       if (h === 21 && m === 48 && s === 0 && !indonesiaRayaTriggered.current) {
         indonesiaRayaTriggered.current = true;
         
-        if ('speechSynthesis' in window && audioEnabled) {
-           const msg = new SpeechSynthesisUtterance("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.");
-           msg.lang = 'id-ID';
-           msg.rate = 0.85;
-           msg.volume = 1;
-           
-           // Munculkan video tepat setelah suara selesai bicara
-           msg.onend = () => setShowIndonesiaRaya(true);
-           
-           window.speechSynthesis.speak(msg);
+        if (audioEnabled) {
+           speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", () => {
+             setShowIndonesiaRaya(true);
+           });
            
            // Backup jika sinyal suara nyangkut (muncul paksa setelah 12 detik)
            setTimeout(() => setShowIndonesiaRaya(true), 12000);
@@ -56,7 +50,7 @@ export default function DisplayPage() {
     }, 1000);
 
     return () => clearInterval(checkTime);
-  }, [audioEnabled]);
+  }, [audioEnabled, speak]);
 
   // Efek untuk mematikan video persis di durasi 1 menit 58 detik (118.000 ms)
   useEffect(() => {
