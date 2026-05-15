@@ -3,43 +3,50 @@ import { useEffect, useState, useRef } from 'react';
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set());
-  // Inisialisasi satu pemain suara tetap agar tidak diblokir TV
-  const audioPlayer = useRef(new Audio());
 
-  // Fungsi untuk memutar suara (Teknik Estafet - Tunggal)
-  const speak = (text, onEndCallback = null) => {
-    const player = audioPlayer.current;
-    
-    // 1. Setel Nada Dering (Bel)
-    player.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
-    player.volume = 0.6;
-    
-    // 2. Siapkan estafet: Setelah Bel selesai, baru putar suara orang
-    player.onended = () => {
-      // Ganti sumber suara ke server orang (Youdao lebih stabil untuk teknik estafet)
-      const ttsUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=id`;
-      player.src = ttsUrl;
-      player.onended = onEndCallback; // Setelah orang selesai bicara, jalankan callback (jika ada)
-      
-      player.play().catch(e => {
-        console.error("Suara orang gagal", e);
-        if (onEndCallback) onEndCallback();
-      });
+  // Fungsi untuk memutar suara (Hybrid: Bel Unik + Suara Orang)
+  const speak = (text, type = 'default', onEndCallback = null) => {
+    // 1. Daftar Nada Bel Berbeda (Sangat Handal untuk TV)
+    const sounds = {
+      start: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',   // Bel Klasik (Mulai)
+      end10: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',   // Bel Alarm (10 Menit)
+      next: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',    // Bel Notif (Berikutnya)
+      active: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'  // Bel Sukses (Aktif)
     };
 
-    // Mulai dari Bel
-    player.play().catch(e => {
-      console.error("Bel gagal, langsung ke suara orang", e);
-      player.onended();
-    });
+    const chime = new Audio(sounds[type] || sounds.active);
+    chime.volume = 0.6;
+    chime.play().catch(() => {});
+
+    // 2. Suara Orang (Native - Untuk Laptop)
+    const synth = window.speechSynthesis;
+    if (synth) {
+      const doSpeak = () => {
+        synth.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'id-ID';
+        msg.rate = 0.9;
+        if (onEndCallback) msg.onend = onEndCallback;
+        synth.speak(msg);
+        if (synth.paused) synth.resume();
+      };
+
+      // Cek apakah suara sudah siap
+      if (synth.getVoices().length > 0) {
+        doSpeak();
+      } else {
+        // Tunggu sebentar jika suara sedang loading
+        synth.onvoiceschanged = doSpeak;
+        setTimeout(doSpeak, 500); 
+      }
+    } else if (onEndCallback) {
+      onEndCallback();
+    }
   };
 
-  // Fungsi untuk membuka blokir suara dari browser saat tombol diklik
+  // Fungsi untuk membuka blokir suara
   const enableAudio = () => {
-    // "Pancing" pemain suara agar diizinkan oleh TV
-    audioPlayer.current.play().catch(() => {});
-    
-    speak('Sistem suara aktif.');
+    speak('Sistem suara aktif.', 'active');
     setAudioEnabled(true);
   };
 
@@ -66,17 +73,17 @@ export function useAudioAnnouncer(schedules) {
         const kelas = s.class_type === 'garuda' ? 'Kelas Garuda' : 'Kelas Citilink';
 
         if (currentTime === startTime && !announcedRef.current.has(`${s.id}-start`)) {
-          speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`);
+          speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`, 'start');
           announcedRef.current.add(`${s.id}-start`);
         }
         
         if (currentTime === endTime - 10 && !announcedRef.current.has(`${s.id}-end10`)) {
-          speak(`Perhatian. Waktu mengajar untuk ${course} di ${kelas}, akan berakhir dalam 10 menit.`);
+          speak(`Perhatian. Waktu mengajar untuk ${course} di ${kelas}, akan berakhir dalam 10 menit.`, 'end10');
           announcedRef.current.add(`${s.id}-end10`);
         }
 
         if (currentTime === startTime - 5 && !announcedRef.current.has(`${s.id}-next5`)) {
-          speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`);
+          speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`, 'next');
           announcedRef.current.add(`${s.id}-next5`);
         }
       });

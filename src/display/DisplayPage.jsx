@@ -13,6 +13,7 @@ export default function DisplayPage() {
     ticker_text: 'Selamat Datang di Triesakti Institute of Airlines'
   });
   const [loading, setLoading] = useState(true);
+  const [showUpdateToast, setShowUpdateToast] = useState(false);
   const [showIndonesiaRaya, setShowIndonesiaRaya] = useState(false);
   const indonesiaRayaTriggered = useRef(false);
 
@@ -36,7 +37,7 @@ export default function DisplayPage() {
         indonesiaRayaTriggered.current = true;
         
         if (audioEnabled) {
-           speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", () => {
+           speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", 'next', () => {
              setShowIndonesiaRaya(true);
            });
            
@@ -67,7 +68,11 @@ export default function DisplayPage() {
 
     const scheduleSub = supabase
       .channel('display-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => fetchSchedules())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+        fetchSchedules();
+        setShowUpdateToast(true);
+        setTimeout(() => setShowUpdateToast(false), 2000);
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'display_settings' }, () => fetchSettings())
       .subscribe();
 
@@ -131,6 +136,18 @@ export default function DisplayPage() {
           >
             Tutup Video
           </button>
+        </div>
+      )}
+
+      {/* Toast Update Otomatis */}
+      {showUpdateToast && (
+        <div style={{
+          position: 'fixed', bottom: '100px', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(212, 175, 55, 0.9)', color: '#000', padding: '10px 25px',
+          borderRadius: '30px', fontWeight: 'bold', zIndex: 1000000, boxShadow: '0 0 20px rgba(212, 175, 55, 0.4)',
+          animation: 'fadeInOut 2s ease-in-out'
+        }}>
+          🔄 Memperbarui Jadwal...
         </div>
       )}
 
