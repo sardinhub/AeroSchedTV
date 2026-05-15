@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import Header from './Header';
 import ColumnPanel from './ColumnPanel';
 import Ticker from './Ticker';
+import { useAudioAnnouncer } from './useAudioAnnouncer';
 import '../styles/display.css';
 
 export default function DisplayPage() {
@@ -12,6 +13,9 @@ export default function DisplayPage() {
     ticker_text: 'Selamat Datang di Triesakti Institute of Airlines'
   });
   const [loading, setLoading] = useState(true);
+
+  // Pasang sistem suara
+  const { audioEnabled, enableAudio } = useAudioAnnouncer(schedules);
 
   useEffect(() => {
     fetchInitialData();
@@ -54,7 +58,32 @@ export default function DisplayPage() {
   if (loading) return <div className="display-loading"><div className="display-loading-spinner"></div></div>;
 
   return (
-    <div className="display-root">
+    <div className="display-root" style={{ position: 'relative' }}>
+      
+      {/* Tombol Rahasia Pengaktif Suara */}
+      {!audioEnabled && (
+        <button 
+          onClick={enableAudio}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            zIndex: 9999,
+            background: 'rgba(212, 175, 55, 0.2)',
+            border: '1px solid #D4AF37',
+            color: '#D4AF37',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            backdropFilter: 'blur(5px)'
+          }}
+        >
+          🔇 Klik Untuk Aktifkan Suara
+        </button>
+      )}
+
       <Header />
       <main className="display-body">
         <ColumnPanel 
