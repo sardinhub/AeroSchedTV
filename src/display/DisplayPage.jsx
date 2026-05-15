@@ -52,16 +52,21 @@ export default function DisplayPage() {
            // Langsung muncul jika audio blm diaktifkan user
            setShowIndonesiaRaya(true);
         }
-
-        // Sembunyikan video otomatis setelah 4 menit (lagu sekitar 3 menitan)
-        setTimeout(() => {
-          setShowIndonesiaRaya(false);
-        }, 240000);
       }
     }, 1000);
 
     return () => clearInterval(checkTime);
   }, [audioEnabled]);
+
+  // Efek untuk mematikan video persis di durasi 1 menit 58 detik (118.000 ms)
+  useEffect(() => {
+    if (showIndonesiaRaya) {
+      const timer = setTimeout(() => {
+        setShowIndonesiaRaya(false);
+      }, 118000); // 118 detik
+      return () => clearTimeout(timer);
+    }
+  }, [showIndonesiaRaya]);
 
   useEffect(() => {
     fetchInitialData();
