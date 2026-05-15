@@ -2,32 +2,47 @@ import { useEffect, useState, useRef } from 'react';
 
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const announcedRef = useRef(new Set()); // Mencatat jadwal yg sudah diumumkan agar tidak looping suara
+  const announcedRef = useRef(new Set()); // Mencatat jadwal yg sudah diumumkan
 
-  // Fungsi Text-To-Speech menggunakan Google TTS (100% Kompatibel dengan Smart TV)
+  // Fungsi Text-To-Speech (Bawaan Browser yang Paling Stabil)
   const speak = (text, onEndCallback = null) => {
+    if (!('speechSynthesis' in window)) {
+      if (onEndCallback) onEndCallback();
+      return;
+    }
+
     try {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
-      const audio = new Audio(url);
-      audio.volume = 1;
+      const msg = new SpeechSynthesisUtterance(text);
+      // Coba paksakan aksen Indonesia
+      msg.lang = 'id-ID';
+      msg.volume = 1;
+      msg.rate = 0.85;
       
       if (onEndCallback) {
-        audio.onended = onEndCallback;
+        msg.onend = onEndCallback;
+        msg.onerror = onEndCallback;
       }
       
-      audio.play().catch(err => {
-        console.error("Gagal memutar suara di TV:", err);
-        if (onEndCallback) onEndCallback(); // Lanjut aksi walau audio gagal
-      });
+      window.speechSynthesis.speak(msg);
+
+      // FIX BROWSER BUG: Kadang browser menunda (pause) suara secara sepihak
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Gagal bicara:", err);
       if (onEndCallback) onEndCallback();
     }
   };
 
-  // Fungsi untuk membuka blokir suara dari browser
+  // Fungsi untuk membuka blokir suara dari browser saat tombol diklik
   const enableAudio = () => {
-    speak('Sistem suara telah diaktifkan.');
+    // Reset/bersihkan antrean yang mungkin macet sebelumnya
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    
+    speak('Tes. Satu. Dua. Tiga. Sistem suara Aero Sched telah aktif.');
     setAudioEnabled(true);
   };
 
