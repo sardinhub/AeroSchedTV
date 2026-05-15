@@ -3,44 +3,43 @@ import { useEffect, useState, useRef } from 'react';
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set());
+  // Inisialisasi satu pemain suara tetap agar tidak diblokir TV
+  const audioPlayer = useRef(new Audio());
 
-  // Fungsi untuk memutar suara (Teknik Simultan untuk Smart TV)
+  // Fungsi untuk memutar suara (Teknik Estafet - Tunggal)
   const speak = (text, onEndCallback = null) => {
-    try {
-      // 1. Jalankan Bel
-      const chime = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      chime.volume = 0.4;
-      chime.play().catch(() => {});
-
-      // 2. Jalankan Suara Orang secara BERSAMAAN (agar tidak diblokir TV)
-      // Menggunakan server Google dengan parameter tambahan agar lebih stabil
-      const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id&client=tw-ob&q=${encodeURIComponent(text)}`;
-      const audio = new Audio(googleUrl);
+    const player = audioPlayer.current;
+    
+    // 1. Setel Nada Dering (Bel)
+    player.src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+    player.volume = 0.6;
+    
+    // 2. Siapkan estafet: Setelah Bel selesai, baru putar suara orang
+    player.onended = () => {
+      // Ganti sumber suara ke server orang (Youdao lebih stabil untuk teknik estafet)
+      const ttsUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=id`;
+      player.src = ttsUrl;
+      player.onended = onEndCallback; // Setelah orang selesai bicara, jalankan callback (jika ada)
       
-      if (onEndCallback) {
-        audio.onended = onEndCallback;
-      }
-
-      // Mulai putar suara orang
-      audio.play().catch(e => {
-        // Jika gagal (mungkin TV tidak dukung Cloud), coba suara lokal sebagai cadangan terakhir
-        const synth = window.speechSynthesis;
-        if (synth) {
-          synth.cancel();
-          const msg = new SpeechSynthesisUtterance(text);
-          msg.lang = 'id-ID';
-          synth.speak(msg);
-        }
+      player.play().catch(e => {
+        console.error("Suara orang gagal", e);
         if (onEndCallback) onEndCallback();
       });
-    } catch (err) {
-      if (onEndCallback) onEndCallback();
-    }
+    };
+
+    // Mulai dari Bel
+    player.play().catch(e => {
+      console.error("Bel gagal, langsung ke suara orang", e);
+      player.onended();
+    });
   };
 
+  // Fungsi untuk membuka blokir suara dari browser saat tombol diklik
   const enableAudio = () => {
-    // Saat klik, langsung tes Bel + Suara
-    speak('Sistem suara Aero Sched telah aktif.');
+    // "Pancing" pemain suara agar diizinkan oleh TV
+    audioPlayer.current.play().catch(() => {});
+    
+    speak('Sistem suara aktif.');
     setAudioEnabled(true);
   };
 
