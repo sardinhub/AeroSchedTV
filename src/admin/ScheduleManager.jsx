@@ -6,6 +6,7 @@ export default function ScheduleManager() {
   const [lecturers, setLecturers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [editingId, setEditingId] = useState(null);
 
   // Form State
   const [lecturerId, setLecturerId] = useState('');
@@ -49,7 +50,7 @@ export default function ScheduleManager() {
     }
 
     setLoading(true);
-    const { error } = await supabase.from('schedules').insert([{
+    const payload = {
       lecturer_id: lecturerId,
       course_name: courseName,
       class_type: classType,
@@ -57,17 +58,49 @@ export default function ScheduleManager() {
       start_time: startTime,
       end_time: endTime,
       room: room
-    }]);
+    };
 
-    if (error) {
-      setMessage({ type: 'error', text: 'Gagal simpan jadwal: ' + error.message });
+    if (editingId) {
+      const { error } = await supabase.from('schedules').update(payload).eq('id', editingId);
+      if (error) {
+        setMessage({ type: 'error', text: 'Gagal update jadwal: ' + error.message });
+      } else {
+        setMessage({ type: 'success', text: 'Jadwal berhasil diperbarui!' });
+        cancelEdit();
+        fetchSchedules();
+      }
     } else {
-      setMessage({ type: 'success', text: 'Jadwal berhasil ditambahkan!' });
-      setCourseName('');
-      setRoom('');
-      fetchSchedules();
+      const { error } = await supabase.from('schedules').insert([payload]);
+      if (error) {
+        setMessage({ type: 'error', text: 'Gagal simpan jadwal: ' + error.message });
+      } else {
+        setMessage({ type: 'success', text: 'Jadwal berhasil ditambahkan!' });
+        setCourseName('');
+        setRoom('');
+        fetchSchedules();
+      }
     }
+    
     setLoading(false);
+  }
+
+  function handleEdit(s) {
+    setEditingId(s.id);
+    setLecturerId(s.lecturer_id);
+    setCourseName(s.course_name);
+    setClassType(s.class_type);
+    setDayOfWeek(s.day_of_week);
+    setStartTime(s.start_time.substring(0, 5));
+    setEndTime(s.end_time.substring(0, 5));
+    setRoom(s.room || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setCourseName('');
+    setRoom('');
+    setLecturerId('');
   }
 
   async function handleDelete(id) {
@@ -88,7 +121,7 @@ export default function ScheduleManager() {
       )}
 
       <div className="form-card">
-        <div className="form-card-title">Tambah Jadwal Baru</div>
+        <div className="form-card-title">{editingId ? 'Edit Jadwal' : 'Tambah Jadwal Baru'}</div>
         <form onSubmit={handleSubmit} className="form-grid cols-3">
           <div className="form-field">
             <label className="form-label">Dosen Pengajar</label>
@@ -171,10 +204,15 @@ export default function ScheduleManager() {
             />
           </div>
 
-          <div className="form-actions full-width">
+          <div className="form-actions full-width" style={{ display: 'flex', gap: '10px' }}>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Menyimpan...' : 'Tambahkan ke Jadwal'}
+              {loading ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambahkan ke Jadwal'}
             </button>
+            {editingId && (
+              <button type="button" onClick={cancelEdit} className="btn" style={{ background: '#333', color: 'white' }}>
+                Batal Edit
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -188,7 +226,7 @@ export default function ScheduleManager() {
               <th>Dosen</th>
               <th>Mata Kuliah</th>
               <th>Kelas</th>
-              <th style={{ width: '80px' }}>Aksi</th>
+              <th style={{ width: '130px', textAlign: 'center' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -209,12 +247,22 @@ export default function ScheduleManager() {
                     </span>
                   </td>
                   <td>
-                    <button 
-                      onClick={() => handleDelete(s.id)}
-                      className="btn btn-danger btn-sm"
-                    >
-                      Hapus
-                    </button>
+                    <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                      <button 
+                        onClick={() => handleEdit(s)}
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(s.id)}
+                        className="btn btn-danger btn-sm"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                      >
+                        Hapus
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
