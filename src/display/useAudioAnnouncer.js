@@ -2,47 +2,44 @@ import { useEffect, useState, useRef } from 'react';
 
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const announcedRef = useRef(new Set()); // Mencatat jadwal yg sudah diumumkan
+  const announcedRef = useRef(new Set());
 
-  // Fungsi Text-To-Speech (Bawaan Browser yang Paling Stabil)
+  // Fungsi untuk memutar suara (Pintar: Bisa deteksi TV tanpa suara)
   const speak = (text, onEndCallback = null) => {
-    if (!('speechSynthesis' in window)) {
-      if (onEndCallback) onEndCallback();
-      return;
-    }
+    // 1. Putar Nada Dering (Bel) dulu agar TV "terbangun"
+    const chime = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    chime.volume = 0.5;
+    chime.play().catch(() => {});
 
-    try {
+    // 2. Cek apakah browser punya mesin suara (Laptop/HP biasanya punya)
+    const synth = window.speechSynthesis;
+    const voices = synth ? synth.getVoices() : [];
+
+    if (synth && voices.length > 0) {
+      // PAKAI SUARA LOKAL (Laptop/HP)
+      synth.cancel();
       const msg = new SpeechSynthesisUtterance(text);
-      // Coba paksakan aksen Indonesia
       msg.lang = 'id-ID';
-      msg.volume = 1;
-      msg.rate = 0.85;
-      
-      if (onEndCallback) {
-        msg.onend = onEndCallback;
-        msg.onerror = onEndCallback;
-      }
-      
-      window.speechSynthesis.speak(msg);
-
-      // FIX BROWSER BUG: Kadang browser menunda (pause) suara secara sepihak
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    } catch (err) {
-      console.error("Gagal bicara:", err);
-      if (onEndCallback) onEndCallback();
+      msg.rate = 0.9;
+      if (onEndCallback) msg.onend = onEndCallback;
+      synth.speak(msg);
+      if (synth.paused) synth.resume();
+    } else {
+      // PAKAI SUARA CLOUD (Khusus Smart TV yang tidak punya suara bawaan)
+      // Menggunakan server cadangan Youdao yang sangat stabil
+      const cloudUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=id`;
+      const audio = new Audio(cloudUrl);
+      if (onEndCallback) audio.onended = onEndCallback;
+      audio.play().catch(e => {
+        console.error("Semua sistem suara gagal di TV ini", e);
+        if (onEndCallback) onEndCallback();
+      });
     }
   };
 
-  // Fungsi untuk membuka blokir suara dari browser saat tombol diklik
   const enableAudio = () => {
-    // Reset/bersihkan antrean yang mungkin macet sebelumnya
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    
-    speak('Tes. Satu. Dua. Tiga. Sistem suara Aero Sched telah aktif.');
+    // Saat klik, langsung tes Bel + Suara
+    speak('Sistem suara Aero Sched telah aktif.');
     setAudioEnabled(true);
   };
 
@@ -68,19 +65,16 @@ export function useAudioAnnouncer(schedules) {
         const course = s.course_name || 'mata kuliah';
         const kelas = s.class_type === 'garuda' ? 'Kelas Garuda' : 'Kelas Citilink';
 
-        // 1. SUARA SAAT JADWAL DIMULAI
         if (currentTime === startTime && !announcedRef.current.has(`${s.id}-start`)) {
           speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`);
           announcedRef.current.add(`${s.id}-start`);
         }
         
-        // 2. SUARA 10 MENIT SEBELUM BERAKHIR
         if (currentTime === endTime - 10 && !announcedRef.current.has(`${s.id}-end10`)) {
           speak(`Perhatian. Waktu mengajar untuk ${course} di ${kelas}, akan berakhir dalam 10 menit.`);
           announcedRef.current.add(`${s.id}-end10`);
         }
 
-        // 3. SUARA JADWAL BERIKUTNYA
         if (currentTime === startTime - 5 && !announcedRef.current.has(`${s.id}-next5`)) {
           speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`);
           announcedRef.current.add(`${s.id}-next5`);
