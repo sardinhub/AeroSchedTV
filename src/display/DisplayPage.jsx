@@ -76,8 +76,14 @@ export default function DisplayPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'display_settings' }, () => fetchSettings())
       .subscribe();
 
+    // Cadangan: Cek data setiap 10 detik jika Real-time gagal/terputus
+    const backupInterval = setInterval(() => {
+      fetchSchedules();
+    }, 10000);
+
     return () => {
       supabase.removeChannel(scheduleSub);
+      clearInterval(backupInterval);
     };
   }, []);
 
