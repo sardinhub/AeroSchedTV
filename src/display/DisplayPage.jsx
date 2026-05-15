@@ -13,9 +13,55 @@ export default function DisplayPage() {
     ticker_text: 'Selamat Datang di Triesakti Institute of Airlines'
   });
   const [loading, setLoading] = useState(true);
+  const [showIndonesiaRaya, setShowIndonesiaRaya] = useState(false);
+  const indonesiaRayaTriggered = useRef(false);
 
   // Pasang sistem suara
   const { audioEnabled, enableAudio } = useAudioAnnouncer(schedules);
+
+  // Effect Khusus Indonesia Raya 21:48 WITA
+  useEffect(() => {
+    const checkTime = setInterval(() => {
+      const now = new Date();
+      // Mengambil waktu lokal TV (pastikan jam dan zona waktu TV sudah benar)
+      const h = now.getHours();
+      const m = now.getMinutes();
+      const s = now.getSeconds();
+
+      // Reset trigger tiap pergantian hari (jam 00:00)
+      if (h === 0 && m === 0) indonesiaRayaTriggered.current = false;
+
+      // Pemicu tepat jam 21:48:00
+      if (h === 21 && m === 48 && s === 0 && !indonesiaRayaTriggered.current) {
+        indonesiaRayaTriggered.current = true;
+        
+        if ('speechSynthesis' in window && audioEnabled) {
+           const msg = new SpeechSynthesisUtterance("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.");
+           msg.lang = 'id-ID';
+           msg.rate = 0.85;
+           msg.volume = 1;
+           
+           // Munculkan video tepat setelah suara selesai bicara
+           msg.onend = () => setShowIndonesiaRaya(true);
+           
+           window.speechSynthesis.speak(msg);
+           
+           // Backup jika sinyal suara nyangkut (muncul paksa setelah 12 detik)
+           setTimeout(() => setShowIndonesiaRaya(true), 12000);
+        } else {
+           // Langsung muncul jika audio blm diaktifkan user
+           setShowIndonesiaRaya(true);
+        }
+
+        // Sembunyikan video otomatis setelah 4 menit (lagu sekitar 3 menitan)
+        setTimeout(() => {
+          setShowIndonesiaRaya(false);
+        }, 240000);
+      }
+    }, 1000);
+
+    return () => clearInterval(checkTime);
+  }, [audioEnabled]);
 
   useEffect(() => {
     fetchInitialData();
@@ -60,6 +106,35 @@ export default function DisplayPage() {
   return (
     <div className="display-root" style={{ position: 'relative' }}>
       
+      {/* Overlay Indonesia Raya */}
+      {showIndonesiaRaya && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'black', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <iframe 
+            width="100%" 
+            height="100%" 
+            src="https://www.youtube.com/embed/hT_nvWreIhg?autoplay=1&controls=0&modestbranding=1" 
+            title="Indonesia Raya" 
+            frameBorder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowFullScreen>
+          </iframe>
+          <button 
+            onClick={() => setShowIndonesiaRaya(false)}
+            style={{ 
+              position: 'absolute', top: '30px', right: '30px', 
+              padding: '10px 20px', background: 'rgba(255,0,0,0.6)', 
+              color: 'white', border: '1px solid white', borderRadius: '5px', 
+              cursor: 'pointer', fontWeight: 'bold' 
+            }}
+          >
+            Tutup Video
+          </button>
+        </div>
+      )}
+
       {/* Tombol Rahasia Pengaktif Suara */}
       {!audioEnabled && (
         <button 
