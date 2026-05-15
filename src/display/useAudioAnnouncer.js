@@ -4,42 +4,38 @@ export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set());
 
-  // Fungsi untuk memutar suara (Pintar: Bisa deteksi TV tanpa suara)
+  // Fungsi untuk memutar suara (Teknik Simultan untuk Smart TV)
   const speak = (text, onEndCallback = null) => {
-    // 1. Siapkan Nada Dering (Bel)
-    const chime = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    chime.volume = 0.6;
+    try {
+      // 1. Jalankan Bel
+      const chime = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      chime.volume = 0.4;
+      chime.play().catch(() => {});
 
-    // 2. Definisi fungsi bicara (akan dipanggil SETELAH Bel selesai)
-    const startSpeaking = () => {
-      const synth = window.speechSynthesis;
-      // Berikan jeda sedikit agar voices sempat loading di TV
-      const voices = synth ? synth.getVoices() : [];
-
-      if (synth && voices.length > 0) {
-        // PAKAI SUARA LOKAL (Laptop/HP)
-        synth.cancel();
-        const msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'id-ID';
-        msg.rate = 0.9;
-        if (onEndCallback) msg.onend = onEndCallback;
-        synth.speak(msg);
-        if (synth.paused) synth.resume();
-      } else {
-        // PAKAI SUARA CLOUD GOOGLE (Khusus Smart TV)
-        const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
-        const audio = new Audio(googleUrl);
-        if (onEndCallback) audio.onended = onEndCallback;
-        audio.play().catch(e => {
-          console.error("Gagal total suara di TV", e);
-          if (onEndCallback) onEndCallback();
-        });
+      // 2. Jalankan Suara Orang secara BERSAMAAN (agar tidak diblokir TV)
+      // Menggunakan server Google dengan parameter tambahan agar lebih stabil
+      const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id&client=tw-ob&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(googleUrl);
+      
+      if (onEndCallback) {
+        audio.onended = onEndCallback;
       }
-    };
 
-    // Jalankan Bel, lalu setelah selesai baru jalankan suara orang
-    chime.onended = startSpeaking;
-    chime.play().catch(() => startSpeaking()); // Jika bel gagal, langsung suara orang
+      // Mulai putar suara orang
+      audio.play().catch(e => {
+        // Jika gagal (mungkin TV tidak dukung Cloud), coba suara lokal sebagai cadangan terakhir
+        const synth = window.speechSynthesis;
+        if (synth) {
+          synth.cancel();
+          const msg = new SpeechSynthesisUtterance(text);
+          msg.lang = 'id-ID';
+          synth.speak(msg);
+        }
+        if (onEndCallback) onEndCallback();
+      });
+    } catch (err) {
+      if (onEndCallback) onEndCallback();
+    }
   };
 
   const enableAudio = () => {
