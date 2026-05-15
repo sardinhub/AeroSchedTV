@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import Header from './Header';
 import ColumnPanel from './ColumnPanel';
