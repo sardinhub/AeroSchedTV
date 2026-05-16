@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 export default function ScheduleManager() {
   const [schedules, setSchedules] = useState([]);
   const [lecturers, setLecturers] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [editingId, setEditingId] = useState(null);
@@ -22,11 +23,17 @@ export default function ScheduleManager() {
   useEffect(() => {
     fetchSchedules();
     fetchLecturers();
+    fetchCourses();
   }, []);
 
   async function fetchLecturers() {
     const { data } = await supabase.from('lecturers').select('id, name').order('name');
     if (data) setLecturers(data);
+  }
+
+  async function fetchCourses() {
+    const { data } = await supabase.from('courses').select('id, name').order('name');
+    if (data) setCourses(data);
   }
 
   async function fetchSchedules() {
@@ -46,6 +53,10 @@ export default function ScheduleManager() {
     e.preventDefault();
     if (!lecturerId) {
       setMessage({ type: 'error', text: 'Pilih dosen terlebih dahulu.' });
+      return;
+    }
+    if (!courseName) {
+      setMessage({ type: 'error', text: 'Pilih mata kuliah terlebih dahulu.' });
       return;
     }
 
@@ -140,13 +151,17 @@ export default function ScheduleManager() {
 
           <div className="form-field">
             <label className="form-label">Mata Kuliah / Program</label>
-            <input 
-              className="form-input" 
-              placeholder="Contoh: Aviation Security" 
-              value={courseName}
+            <select 
+              className="form-select" 
+              value={courseName} 
               onChange={e => setCourseName(e.target.value)}
               required
-            />
+            >
+              <option value="">-- Pilih Mata Kuliah --</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="form-field">

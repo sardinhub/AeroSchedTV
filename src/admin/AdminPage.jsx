@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import LecturerManager from './LecturerManager';
 import ScheduleManager from './ScheduleManager';
+import CourseManager from './CourseManager';
 import DisplaySettings from './DisplaySettings';
 import '../styles/admin.css';
 
@@ -46,6 +47,12 @@ export default function AdminPage() {
           <span className="admin-nav-tab-icon">👨‍🏫</span> Data Dosen
         </button>
         <button
+          className={`admin-nav-tab ${activeTab === 'courses' ? 'active' : ''}`}
+          onClick={() => setActiveTab('courses')}
+        >
+          <span className="admin-nav-tab-icon">📚</span> Mata Kuliah
+        </button>
+        <button
           className={`admin-nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
@@ -59,6 +66,7 @@ export default function AdminPage() {
       <main className="admin-body">
         {activeTab === 'schedules' && <ScheduleManager />}
         {activeTab === 'lecturers' && <LecturerManager />}
+        {activeTab === 'courses' && <CourseManager />}
         {activeTab === 'settings' && <DisplaySettings />}
       </main>
     </div>

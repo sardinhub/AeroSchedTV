@@ -10,6 +10,8 @@ export default function LecturerManager() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  const [editingId, setEditingId] = useState(null);
+
   useEffect(() => {
     fetchLecturers();
   }, []);
@@ -31,12 +33,29 @@ export default function LecturerManager() {
     }
   };
 
+  function handleEdit(l) {
+    setEditingId(l.id);
+    setName(l.name);
+    setNidn(l.nidn || '');
+    setPreviewUrl(l.photo_url || '');
+    setFile(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setName('');
+    setNidn('');
+    setFile(null);
+    setPreviewUrl('');
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    let photo_url = '';
+    let photo_url = editingId ? previewUrl : '';
 
     // 1. Upload photo if exists
     if (file) {
@@ -59,20 +78,36 @@ export default function LecturerManager() {
       photo_url = publicUrl;
     }
 
-    // 2. Save lecturer data
-    const { error: insertError } = await supabase
-      .from('lecturers')
-      .insert([{ name, nidn, photo_url }]);
+    const payload = { name, nidn, photo_url };
 
-    if (insertError) {
-      setMessage({ type: 'error', text: 'Gagal simpan data: ' + insertError.message });
+    if (editingId) {
+      const { error: updateError } = await supabase
+        .from('lecturers')
+        .update(payload)
+        .eq('id', editingId);
+
+      if (updateError) {
+        setMessage({ type: 'error', text: 'Gagal update data: ' + updateError.message });
+      } else {
+        setMessage({ type: 'success', text: 'Data dosen berhasil diperbarui!' });
+        cancelEdit();
+        fetchLecturers();
+      }
     } else {
-      setMessage({ type: 'success', text: 'Dosen berhasil ditambahkan!' });
-      setName('');
-      setNidn('');
-      setFile(null);
-      setPreviewUrl('');
-      fetchLecturers();
+      const { error: insertError } = await supabase
+        .from('lecturers')
+        .insert([payload]);
+
+      if (insertError) {
+        setMessage({ type: 'error', text: 'Gagal simpan data: ' + insertError.message });
+      } else {
+        setMessage({ type: 'success', text: 'Dosen berhasil ditambahkan!' });
+        setName('');
+        setNidn('');
+        setFile(null);
+        setPreviewUrl('');
+        fetchLecturers();
+      }
     }
     setLoading(false);
   }
@@ -102,7 +137,7 @@ export default function LecturerManager() {
       )}
 
       <div className="form-card">
-        <div className="form-card-title">Tambah Dosen Baru</div>
+        <div className="form-card-title">{editingId ? 'Edit Data Dosen' : 'Tambah Dosen Baru'}</div>
         <form onSubmit={handleSubmit} className="form-grid cols-2">
           <div className="form-field full-width">
             <label className="form-label">Foto Profil Dosen</label>
@@ -112,11 +147,11 @@ export default function LecturerManager() {
               </div>
               <div className="photo-upload-btn">
                 <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleFileChange} 
-                  id="lecturer-photo"
-                  hidden 
+                   type="file" 
+                   accept="image/*" 
+                   onChange={handleFileChange} 
+                   id="lecturer-photo"
+                   hidden 
                 />
                 <button 
                   type="button" 
@@ -151,10 +186,15 @@ export default function LecturerManager() {
             />
           </div>
 
-          <div className="form-actions full-width">
+          <div className="form-actions full-width" style={{ display: 'flex', gap: '10px' }}>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Menyimpan...' : 'Simpan Data Dosen'}
+              {loading ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Simpan Data Dosen'}
             </button>
+            {editingId && (
+              <button type="button" onClick={cancelEdit} className="btn btn-secondary">
+                Batal Edit
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -166,7 +206,7 @@ export default function LecturerManager() {
               <th style={{ width: '60px' }}>Foto</th>
               <th>Nama Dosen</th>
               <th>NIDN</th>
-              <th style={{ width: '100px' }}>Aksi</th>
+              <th style={{ width: '130px', textAlign: 'center' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -187,12 +227,20 @@ export default function LecturerManager() {
                   <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{l.name}</td>
                   <td>{l.nidn || '-'}</td>
                   <td>
-                    <button 
-                      onClick={() => handleDelete(l.id, l.photo_url)}
-                      className="btn btn-danger btn-sm"
-                    >
-                      Hapus
-                    </button>
+                    <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                      <button 
+                        onClick={() => handleEdit(l)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(l.id, l.photo_url)}
+                        className="btn btn-danger btn-sm"
+                      >
+                        Hapus
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
