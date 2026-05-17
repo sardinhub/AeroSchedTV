@@ -17,11 +17,24 @@ export default function DisplayPage() {
   const [showIndonesiaRaya, setShowIndonesiaRaya] = useState(false);
   const indonesiaRayaTriggered = useRef(false);
   const sholatTriggered = useRef(new Set());
+  const unmuteButtonRef = useRef(null);
 
   // Pasang sistem suara
   const { audioEnabled, enableAudio, speak } = useAudioAnnouncer(schedules);
 
-  // Efek khusus untuk mendeteksi tombol remote TV atau klik di mana pun untuk membuka audio
+  // Auto-focus tombol unmute saat halaman dimuat (Sangat penting untuk Smart TV remote agar tombol OK bisa langsung mengklik)
+  useEffect(() => {
+    if (!audioEnabled && unmuteButtonRef.current) {
+      setTimeout(() => {
+        if (unmuteButtonRef.current) {
+          unmuteButtonRef.current.focus();
+          console.log("🎯 Tombol Unmute berhasil di-focus otomatis!");
+        }
+      }, 1000);
+    }
+  }, [audioEnabled, loading]);
+
+  // Efek khusus untuk mendeteksi klik atau sentuhan di mana pun untuk membuka audio
   useEffect(() => {
     if (audioEnabled) return;
 
@@ -35,13 +48,13 @@ export default function DisplayPage() {
 
     const removeListeners = () => {
       window.removeEventListener('click', handleGlobalInteraction);
-      window.removeEventListener('keydown', handleGlobalInteraction);
       window.removeEventListener('touchstart', handleGlobalInteraction);
     };
 
-    // Dengarkan klik mouse, sentuhan layar, dan penekanan tombol keyboard/remote TV
+    // Hanya dengarkan klik mouse dan sentuhan layar (Valid User Gestures)
+    // Hindari mendengarkan keydown global karena Smart TV menganggap penekanan tombol remote (keydown) 
+    // sebagai interaksi tidak sah untuk membuka audio, yang menyebabkan pemutar audio terblokir selamanya.
     window.addEventListener('click', handleGlobalInteraction);
-    window.addEventListener('keydown', handleGlobalInteraction);
     window.addEventListener('touchstart', handleGlobalInteraction);
 
     return removeListeners;
@@ -204,24 +217,27 @@ export default function DisplayPage() {
       {/* Tombol Rahasia Pengaktif Suara */}
       {!audioEnabled && (
         <button 
+          ref={unmuteButtonRef}
           onClick={enableAudio}
           style={{
             position: 'absolute',
             top: '20px',
             right: '20px',
             zIndex: 9999,
-            background: 'rgba(212, 175, 55, 0.2)',
-            border: '1px solid #D4AF37',
+            background: 'rgba(212, 175, 55, 0.35)',
+            border: '2px solid #D4AF37',
             color: '#D4AF37',
-            padding: '8px 16px',
-            borderRadius: '20px',
+            padding: '12px 24px',
+            borderRadius: '25px',
             cursor: 'pointer',
-            fontSize: '14px',
+            fontSize: '15px',
             fontWeight: 'bold',
-            backdropFilter: 'blur(5px)'
+            backdropFilter: 'blur(10px)',
+            outline: 'none',
+            boxShadow: '0 0 25px rgba(212, 175, 55, 0.4)'
           }}
         >
-          🔇 Klik Untuk Aktifkan Suara
+          🔇 Klik / Tekan OK Remote untuk Aktifkan Suara
         </button>
       )}
 
