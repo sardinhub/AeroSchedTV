@@ -5,45 +5,7 @@ export function useAudioAnnouncer(schedules) {
   const announcedRef = useRef(new Set());
   const audioQueue = useRef([]);
   const isPlaying = useRef(false);
-  const audioRef = useRef(null);
   const watchdogRef = useRef(null);
-
-  // Inisialisasi elemen Audio tunggal yang ditempel ke DOM (Wajib untuk Smart TV)
-  useEffect(() => {
-    const audio = document.createElement('audio');
-    audio.id = 'aerosched-audio-announcer';
-    
-    // Smart TV Optimization: Jangan gunakan display: none karena TV menonaktifkan decoder audio
-    // Gunakan elemen berukuran 1px transparan agar decoder tetap aktif 100%
-    audio.style.position = 'absolute';
-    audio.style.width = '1px';
-    audio.style.height = '1px';
-    audio.style.opacity = '0.001';
-    audio.style.pointerEvents = 'none';
-    
-    // Set referrerpolicy secara aman menggunakan setAttribute dan try-catch agar tidak crash di TV lama
-    try {
-      audio.setAttribute('referrerpolicy', 'no-referrer');
-    } catch (e) {
-      console.warn("Referrerpolicy attribute not supported on this browser:", e);
-    }
-    
-    document.body.appendChild(audio);
-    audioRef.current = audio;
-
-    return () => {
-      if (audioRef.current) {
-        try {
-          document.body.removeChild(audioRef.current);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      if (watchdogRef.current) {
-        clearTimeout(watchdogRef.current);
-      }
-    };
-  }, []);
 
   const clearWatchdog = () => {
     if (watchdogRef.current) {
@@ -56,17 +18,9 @@ export function useAudioAnnouncer(schedules) {
     clearWatchdog();
     watchdogRef.current = setTimeout(() => {
       console.warn("⚠️ Watchdog triggered: Audio playback took too long. Force continuing queue...");
-      cleanupAudioListeners();
       isPlaying.current = false;
       playNextInQueue();
-    }, 15000); // 15 detik batas maksimum per pengumuman
-  };
-
-  const cleanupAudioListeners = () => {
-    if (audioRef.current) {
-      audioRef.current.onended = null;
-      audioRef.current.onerror = null;
-    }
+    }, 12000); // 12 detik batas maksimum per pengumuman
   };
 
   // Fungsi untuk memutar antrean audio secara berurutan (Sequential Queue)
@@ -78,53 +32,41 @@ export function useAudioAnnouncer(schedules) {
       return;
     }
 
-    if (!audioRef.current) {
-      console.error("Audio element not initialized yet.");
-      return;
-    }
-
     isPlaying.current = true;
     startWatchdog();
 
     const currentItem = audioQueue.current.shift();
     const { chimeUrl, text, onEndCallback } = currentItem;
-    const audio = audioRef.current;
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
-      cleanupAudioListeners();
+      // Prioritas 1: StreamElements Amazon Polly (Sangat natural, bebas CORS/Referrer Block!)
+      const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
+      const voiceAudio = new Audio(streamElementsUrl);
+      voiceAudio.volume = 0.95;
 
-      // Prioritas 1: Google TTS API (Format MP3 standar)
-      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
-      audio.src = googleTtsUrl;
-      audio.volume = 0.95;
-
-      audio.onended = () => {
-        cleanupAudioListeners();
+      voiceAudio.onended = () => {
         clearWatchdog();
         if (onEndCallback) onEndCallback();
-        setTimeout(playNextInQueue, 800); // Beri jeda 800ms sebelum antrean berikutnya
+        setTimeout(playNextInQueue, 800); // Beri jeda sebelum antrean berikutnya
       };
 
-      audio.onerror = () => {
-        console.warn("Gagal memutar Google TTS. Mencoba Fallback 1: StreamElements Amazon Polly...");
-        cleanupAudioListeners();
+      voiceAudio.onerror = (e) => {
+        console.warn("Gagal memutar StreamElements. Mencoba Fallback 1: Google TTS...", e);
+        
+        // Fallback 1: Google TTS API (Format MP3 standar)
+        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
+        const fallbackAudio = new Audio(googleTtsUrl);
+        fallbackAudio.volume = 0.95;
 
-        // Fallback 1: StreamElements Amazon Polly (Sangat andal untuk Smart TV, Bebas CORS/Referrer Block!)
-        const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
-        audio.src = streamElementsUrl;
-        audio.volume = 0.95;
-
-        audio.onended = () => {
-          cleanupAudioListeners();
+        fallbackAudio.onended = () => {
           clearWatchdog();
           if (onEndCallback) onEndCallback();
           setTimeout(playNextInQueue, 800);
         };
 
-        audio.onerror = () => {
-          console.warn("StreamElements juga gagal. Mencoba Fallback 2: Web Speech API...");
-          cleanupAudioListeners();
+        fallbackAudio.onerror = () => {
+          console.warn("Google TTS juga gagal. Mencoba Fallback 2: Web Speech API...");
           clearWatchdog();
 
           // Fallback 2: Web Speech API (Untuk Laptop/Desktop offline)
@@ -149,8 +91,8 @@ export function useAudioAnnouncer(schedules) {
 
               synth.speak(msg);
               if (synth.paused) synth.resume();
-            } catch (e) {
-              console.error("SpeechSynthesis error caught:", e);
+            } catch (err) {
+              console.error("SpeechSynthesis error caught:", err);
               if (onEndCallback) onEndCallback();
               setTimeout(playNextInQueue, 500);
             }
@@ -161,37 +103,33 @@ export function useAudioAnnouncer(schedules) {
           }
         };
 
-        audio.play().catch((err) => {
-          console.warn("Playback StreamElements diblokir atau gagal:", err);
-          audio.onerror();
+        fallbackAudio.play().catch((err) => {
+          console.warn("Playback Google TTS diblokir:", err);
+          fallbackAudio.onerror();
         });
       };
 
-      audio.play().catch((err) => {
-        console.warn("Playback Google TTS diblokir atau gagal:", err);
-        audio.onerror(); // Paksa masuk ke fallback
+      voiceAudio.play().catch((err) => {
+        console.warn("Playback StreamElements diblokir:", err);
+        voiceAudio.onerror(); // Paksa masuk ke fallback
       });
     };
 
-    // Langkah 1: Inisialisasi Chime (Bel)
-    cleanupAudioListeners();
-    audio.src = chimeUrl;
-    audio.volume = 0.6;
+    // Jalankan Bel Chime menggunakan Objek Audio Baru yang segar (100% Kompatibel dengan Smart TV)
+    const chime = new Audio(chimeUrl);
+    chime.volume = 0.6;
 
-    audio.onended = () => {
-      cleanupAudioListeners();
+    chime.onended = () => {
       playSpeech();
     };
 
-    audio.onerror = () => {
+    chime.onerror = () => {
       console.warn("Gagal memutar chime. Langsung memutar suara pembaca.");
-      cleanupAudioListeners();
       playSpeech();
     };
 
-    audio.play().catch((err) => {
+    chime.play().catch((err) => {
       console.warn("Playback chime diblokir, mencoba langsung suara pembaca:", err);
-      cleanupAudioListeners();
       playSpeech();
     });
   };
@@ -216,33 +154,28 @@ export function useAudioAnnouncer(schedules) {
     }
   };
 
-  // Fungsi pembuka kunci suara sinkron (Wajib dipanggil di dalam event handler sinkron)
+  // Fungsi pembuka kunci suara sinkron (Wajib dipanggil di dalam event handler sinkron klik/remote)
   const enableAudio = () => {
-    if (audioRef.current) {
-      console.log("Attempting synchronous audio context unlock...");
-      cleanupAudioListeners();
-      
-      // Load bel aktif secara sinkron langsung di dalam user gesture call stack
-      audioRef.current.src = 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3';
-      audioRef.current.volume = 0.5;
-      
-      audioRef.current.play()
-        .then(() => {
-          console.log("🔊 TV Browser Audio Context successfully unlocked synchronously!");
-          setAudioEnabled(true);
-          // Mainkan teks sambutan setelah berhasil un-mute
-          setTimeout(() => {
-            speak('Sistem suara aktif dan siap digunakan.', 'active');
-          }, 800);
-        })
-        .catch(err => {
-          console.error("Synchronous unlock failed:", err);
-          // Fallback jika TV masih memblokir: tetap tandai true agar user bisa berinteraksi lagi
-          setAudioEnabled(true);
-        });
-    } else {
-      setAudioEnabled(true);
-    }
+    console.log("Attempting synchronous audio context unlock...");
+    
+    // Jalankan chime aktif secara sinkron langsung menggunakan objek audio baru
+    const unlockAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3');
+    unlockAudio.volume = 0.5;
+    
+    unlockAudio.play()
+      .then(() => {
+        console.log("🔊 TV Browser Audio Context successfully unlocked synchronously!");
+        setAudioEnabled(true);
+        // Mainkan teks sambutan setelah berhasil un-mute
+        setTimeout(() => {
+          speak('Sistem suara aktif dan siap digunakan.', 'active');
+        }, 800);
+      })
+      .catch(err => {
+        console.error("Synchronous unlock failed:", err);
+        // Fallback jika TV masih protektif, tetap tandai true agar user bisa melanjutkan interaksi
+        setAudioEnabled(true);
+      });
   };
 
   useEffect(() => {
