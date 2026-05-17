@@ -12,7 +12,14 @@ export function useAudioAnnouncer(schedules) {
   useEffect(() => {
     const audio = document.createElement('audio');
     audio.id = 'aerosched-audio-announcer';
-    audio.style.display = 'none';
+    
+    // Smart TV Optimization: Jangan gunakan display: none karena TV menonaktifkan decoder audio
+    // Gunakan elemen berukuran 1px transparan agar decoder tetap aktif 100%
+    audio.style.position = 'absolute';
+    audio.style.width = '1px';
+    audio.style.height = '1px';
+    audio.style.opacity = '0.001';
+    audio.style.pointerEvents = 'none';
     
     // Set referrerpolicy secara aman menggunakan setAttribute dan try-catch agar tidak crash di TV lama
     try {
@@ -209,9 +216,33 @@ export function useAudioAnnouncer(schedules) {
     }
   };
 
+  // Fungsi pembuka kunci suara sinkron (Wajib dipanggil di dalam event handler sinkron)
   const enableAudio = () => {
-    speak('Sistem suara aktif dan siap digunakan.', 'active');
-    setAudioEnabled(true);
+    if (audioRef.current) {
+      console.log("Attempting synchronous audio context unlock...");
+      cleanupAudioListeners();
+      
+      // Load bel aktif secara sinkron langsung di dalam user gesture call stack
+      audioRef.current.src = 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3';
+      audioRef.current.volume = 0.5;
+      
+      audioRef.current.play()
+        .then(() => {
+          console.log("🔊 TV Browser Audio Context successfully unlocked synchronously!");
+          setAudioEnabled(true);
+          // Mainkan teks sambutan setelah berhasil un-mute
+          setTimeout(() => {
+            speak('Sistem suara aktif dan siap digunakan.', 'active');
+          }, 800);
+        })
+        .catch(err => {
+          console.error("Synchronous unlock failed:", err);
+          // Fallback jika TV masih memblokir: tetap tandai true agar user bisa berinteraksi lagi
+          setAudioEnabled(true);
+        });
+    } else {
+      setAudioEnabled(true);
+    }
   };
 
   useEffect(() => {
