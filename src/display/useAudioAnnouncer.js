@@ -5,75 +5,143 @@ export function useAudioAnnouncer(schedules) {
   const announcedRef = useRef(new Set());
   const audioQueue = useRef([]);
   const isPlaying = useRef(false);
+  const audioRef = useRef(null);
+  const watchdogRef = useRef(null);
+
+  // Inisialisasi elemen Audio tunggal yang ditempel ke DOM (Wajib untuk Smart TV)
+  useEffect(() => {
+    const audio = document.createElement('audio');
+    audio.id = 'aerosched-audio-announcer';
+    audio.referrerPolicy = 'no-referrer';
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
+    audioRef.current = audio;
+
+    return () => {
+      if (audioRef.current) {
+        try {
+          document.body.removeChild(audioRef.current);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+      }
+    };
+  }, []);
+
+  const clearWatchdog = () => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  };
+
+  const startWatchdog = () => {
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => {
+      console.warn("⚠️ Watchdog triggered: Audio playback took too long. Force continuing queue...");
+      cleanupAudioListeners();
+      isPlaying.current = false;
+      playNextInQueue();
+    }, 15000); // 15 detik batas maksimum per pengumuman
+  };
+
+  const cleanupAudioListeners = () => {
+    if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+    }
+  };
 
   // Fungsi untuk memutar antrean audio secara berurutan (Sequential Queue)
   const playNextInQueue = () => {
+    clearWatchdog();
+
     if (audioQueue.current.length === 0) {
       isPlaying.current = false;
       return;
     }
 
+    if (!audioRef.current) {
+      console.error("Audio element not initialized yet.");
+      return;
+    }
+
     isPlaying.current = true;
+    startWatchdog();
+
     const currentItem = audioQueue.current.shift();
     const { chimeUrl, text, onEndCallback } = currentItem;
-
-    // 1. Inisialisasi Chime (Bel)
-    const chime = new Audio(chimeUrl);
-    chime.volume = 0.6;
+    const audio = audioRef.current;
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
-      // Prioritas 1: Google TTS API (Format MP3 standar, sangat handal untuk Smart TV) dengan Referrer Policy dimatikan
-      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
-      const speechAudio = document.createElement('audio');
-      speechAudio.referrerPolicy = "no-referrer";
-      speechAudio.src = googleTtsUrl;
-      speechAudio.volume = 0.95;
+      cleanupAudioListeners();
 
-      speechAudio.onended = () => {
+      // Prioritas 1: Google TTS API (Format MP3 standar)
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
+      audio.referrerPolicy = "no-referrer";
+      audio.src = googleTtsUrl;
+      audio.volume = 0.95;
+
+      audio.onended = () => {
+        cleanupAudioListeners();
+        clearWatchdog();
         if (onEndCallback) onEndCallback();
         setTimeout(playNextInQueue, 800); // Beri jeda 800ms sebelum antrean berikutnya
       };
 
-      speechAudio.onerror = () => {
+      audio.onerror = () => {
         console.warn("Gagal memutar Google TTS. Mencoba Fallback 1: StreamElements Amazon Polly...");
-        
-        // Fallback 1: StreamElements Amazon Polly (Sangat andal untuk Smart TV, Bebas Referrer/CORS!)
-        const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
-        const fallbackAudio = document.createElement('audio');
-        fallbackAudio.referrerPolicy = "no-referrer";
-        fallbackAudio.src = streamElementsUrl;
-        fallbackAudio.volume = 0.95;
+        cleanupAudioListeners();
 
-        fallbackAudio.onended = () => {
+        // Fallback 1: StreamElements Amazon Polly (Sangat andal untuk Smart TV, Bebas CORS/Referrer Block!)
+        const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
+        audio.referrerPolicy = "no-referrer";
+        audio.src = streamElementsUrl;
+        audio.volume = 0.95;
+
+        audio.onended = () => {
+          cleanupAudioListeners();
+          clearWatchdog();
           if (onEndCallback) onEndCallback();
           setTimeout(playNextInQueue, 800);
         };
 
-        fallbackAudio.onerror = () => {
+        audio.onerror = () => {
           console.warn("StreamElements juga gagal. Mencoba Fallback 2: Web Speech API...");
+          cleanupAudioListeners();
+          clearWatchdog();
 
           // Fallback 2: Web Speech API (Untuk Laptop/Desktop offline)
           const synth = window.speechSynthesis;
           if (synth) {
-            synth.cancel();
-            const msg = new SpeechSynthesisUtterance(text);
-            msg.lang = 'id-ID';
-            msg.rate = 0.9;
-            
-            msg.onend = () => {
-              if (onEndCallback) onEndCallback();
-              setTimeout(playNextInQueue, 800);
-            };
+            try {
+              synth.cancel();
+              const msg = new SpeechSynthesisUtterance(text);
+              msg.lang = 'id-ID';
+              msg.rate = 0.9;
+              
+              msg.onend = () => {
+                if (onEndCallback) onEndCallback();
+                setTimeout(playNextInQueue, 800);
+              };
 
-            msg.onerror = () => {
-              console.error("Web Speech API juga gagal.");
+              msg.onerror = () => {
+                console.error("Web Speech API juga gagal.");
+                if (onEndCallback) onEndCallback();
+                setTimeout(playNextInQueue, 500);
+              };
+
+              synth.speak(msg);
+              if (synth.paused) synth.resume();
+            } catch (e) {
+              console.error("SpeechSynthesis error caught:", e);
               if (onEndCallback) onEndCallback();
               setTimeout(playNextInQueue, 500);
-            };
-
-            synth.speak(msg);
-            if (synth.paused) synth.resume();
+            }
           } else {
             // Fallback 3: Jika semuanya gagal, lanjut ke antrean berikutnya
             if (onEndCallback) onEndCallback();
@@ -81,26 +149,38 @@ export function useAudioAnnouncer(schedules) {
           }
         };
 
-        fallbackAudio.play().catch((err) => {
+        audio.play().catch((err) => {
           console.warn("Playback StreamElements diblokir atau gagal:", err);
-          fallbackAudio.onerror();
+          audio.onerror();
         });
       };
 
-      speechAudio.play().catch((err) => {
+      audio.play().catch((err) => {
         console.warn("Playback Google TTS diblokir atau gagal:", err);
-        speechAudio.onerror(); // Paksa masuk ke fallback
+        audio.onerror(); // Paksa masuk ke fallback
       });
     };
 
-    chime.onended = playSpeech;
-    chime.onerror = () => {
-      console.warn("Gagal memutar chime. Langsung memutar suara pembaca.");
+    // Langkah 1: Inisialisasi Chime (Bel)
+    cleanupAudioListeners();
+    audio.referrerPolicy = "no-referrer";
+    audio.src = chimeUrl;
+    audio.volume = 0.6;
+
+    audio.onended = () => {
+      cleanupAudioListeners();
       playSpeech();
     };
 
-    chime.play().catch((err) => {
+    audio.onerror = () => {
+      console.warn("Gagal memutar chime. Langsung memutar suara pembaca.");
+      cleanupAudioListeners();
+      playSpeech();
+    };
+
+    audio.play().catch((err) => {
       console.warn("Playback chime diblokir, mencoba langsung suara pembaca:", err);
+      cleanupAudioListeners();
       playSpeech();
     });
   };
