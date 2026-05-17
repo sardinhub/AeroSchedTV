@@ -168,10 +168,11 @@ export default function DisplayPage() {
           <iframe 
             width="100%" 
             height="100%" 
-            src="https://www.youtube.com/embed/uyyLot4PLXM?autoplay=1&controls=0&modestbranding=1" 
+            src="https://www.youtube-nocookie.com/embed/uyyLot4PLXM?autoplay=1&controls=0&modestbranding=1" 
             title="Indonesia Raya" 
             frameBorder="0" 
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen>
           </iframe>
           <button 
