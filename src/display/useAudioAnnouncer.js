@@ -12,8 +12,15 @@ export function useAudioAnnouncer(schedules) {
   useEffect(() => {
     const audio = document.createElement('audio');
     audio.id = 'aerosched-audio-announcer';
-    audio.referrerPolicy = 'no-referrer';
     audio.style.display = 'none';
+    
+    // Set referrerpolicy secara aman menggunakan setAttribute dan try-catch agar tidak crash di TV lama
+    try {
+      audio.setAttribute('referrerpolicy', 'no-referrer');
+    } catch (e) {
+      console.warn("Referrerpolicy attribute not supported on this browser:", e);
+    }
+    
     document.body.appendChild(audio);
     audioRef.current = audio;
 
@@ -82,7 +89,6 @@ export function useAudioAnnouncer(schedules) {
 
       // Prioritas 1: Google TTS API (Format MP3 standar)
       const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
-      audio.referrerPolicy = "no-referrer";
       audio.src = googleTtsUrl;
       audio.volume = 0.95;
 
@@ -99,7 +105,6 @@ export function useAudioAnnouncer(schedules) {
 
         // Fallback 1: StreamElements Amazon Polly (Sangat andal untuk Smart TV, Bebas CORS/Referrer Block!)
         const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
-        audio.referrerPolicy = "no-referrer";
         audio.src = streamElementsUrl;
         audio.volume = 0.95;
 
@@ -163,7 +168,6 @@ export function useAudioAnnouncer(schedules) {
 
     // Langkah 1: Inisialisasi Chime (Bel)
     cleanupAudioListeners();
-    audio.referrerPolicy = "no-referrer";
     audio.src = chimeUrl;
     audio.volume = 0.6;
 
