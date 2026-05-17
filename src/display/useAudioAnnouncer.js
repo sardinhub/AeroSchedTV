@@ -23,9 +23,11 @@ export function useAudioAnnouncer(schedules) {
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
-      // Prioritas 1: Google TTS API (Format MP3 standar, sangat handal untuk Smart TV)
+      // Prioritas 1: Google TTS API (Format MP3 standar, sangat handal untuk Smart TV) dengan Referrer Policy dimatikan
       const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
-      const speechAudio = new Audio(googleTtsUrl);
+      const speechAudio = document.createElement('audio');
+      speechAudio.referrerPolicy = "no-referrer";
+      speechAudio.src = googleTtsUrl;
       speechAudio.volume = 0.95;
 
       speechAudio.onended = () => {
@@ -34,34 +36,55 @@ export function useAudioAnnouncer(schedules) {
       };
 
       speechAudio.onerror = () => {
-        console.warn("Gagal memutar Google TTS. Mencoba Fallback ke Web Speech API...");
+        console.warn("Gagal memutar Google TTS. Mencoba Fallback 1: StreamElements Amazon Polly...");
         
-        // Fallback 1: Web Speech API (Untuk Laptop/Desktop offline)
-        const synth = window.speechSynthesis;
-        if (synth) {
-          synth.cancel();
-          const msg = new SpeechSynthesisUtterance(text);
-          msg.lang = 'id-ID';
-          msg.rate = 0.9;
-          
-          msg.onend = () => {
-            if (onEndCallback) onEndCallback();
-            setTimeout(playNextInQueue, 800);
-          };
+        // Fallback 1: StreamElements Amazon Polly (Sangat andal untuk Smart TV, Bebas Referrer/CORS!)
+        const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
+        const fallbackAudio = document.createElement('audio');
+        fallbackAudio.referrerPolicy = "no-referrer";
+        fallbackAudio.src = streamElementsUrl;
+        fallbackAudio.volume = 0.95;
 
-          msg.onerror = () => {
-            console.error("Web Speech API juga gagal.");
+        fallbackAudio.onended = () => {
+          if (onEndCallback) onEndCallback();
+          setTimeout(playNextInQueue, 800);
+        };
+
+        fallbackAudio.onerror = () => {
+          console.warn("StreamElements juga gagal. Mencoba Fallback 2: Web Speech API...");
+
+          // Fallback 2: Web Speech API (Untuk Laptop/Desktop offline)
+          const synth = window.speechSynthesis;
+          if (synth) {
+            synth.cancel();
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'id-ID';
+            msg.rate = 0.9;
+            
+            msg.onend = () => {
+              if (onEndCallback) onEndCallback();
+              setTimeout(playNextInQueue, 800);
+            };
+
+            msg.onerror = () => {
+              console.error("Web Speech API juga gagal.");
+              if (onEndCallback) onEndCallback();
+              setTimeout(playNextInQueue, 500);
+            };
+
+            synth.speak(msg);
+            if (synth.paused) synth.resume();
+          } else {
+            // Fallback 3: Jika semuanya gagal, lanjut ke antrean berikutnya
             if (onEndCallback) onEndCallback();
             setTimeout(playNextInQueue, 500);
-          };
+          }
+        };
 
-          synth.speak(msg);
-          if (synth.paused) synth.resume();
-        } else {
-          // Fallback 2: Jika semuanya gagal, lanjut ke antrean berikutnya
-          if (onEndCallback) onEndCallback();
-          setTimeout(playNextInQueue, 500);
-        }
+        fallbackAudio.play().catch((err) => {
+          console.warn("Playback StreamElements diblokir atau gagal:", err);
+          fallbackAudio.onerror();
+        });
       };
 
       speechAudio.play().catch((err) => {
