@@ -3,50 +3,107 @@ import { useEffect, useState, useRef } from 'react';
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set());
+  const audioQueue = useRef([]);
+  const isPlaying = useRef(false);
 
-  // Fungsi untuk memutar suara (Hybrid: Bel Unik + Suara Orang)
-  const speak = (text, type = 'default', onEndCallback = null) => {
-    // 1. Daftar Nada Bel Berbeda (Sangat Handal untuk TV)
-    const sounds = {
-      start: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',   // Bel Klasik (Mulai)
-      end10: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',   // Bel Alarm (10 Menit)
-      next: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',    // Bel Notif (Berikutnya)
-      active: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'  // Bel Sukses (Aktif)
-    };
+  // Fungsi untuk memutar antrean audio secara berurutan (Sequential Queue)
+  const playNextInQueue = () => {
+    if (audioQueue.current.length === 0) {
+      isPlaying.current = false;
+      return;
+    }
 
-    const chime = new Audio(sounds[type] || sounds.active);
+    isPlaying.current = true;
+    const currentItem = audioQueue.current.shift();
+    const { chimeUrl, text, onEndCallback } = currentItem;
+
+    // 1. Inisialisasi Chime (Bel)
+    const chime = new Audio(chimeUrl);
     chime.volume = 0.6;
-    chime.play().catch(() => {});
 
-    // 2. Suara Orang (Native - Untuk Laptop)
-    const synth = window.speechSynthesis;
-    if (synth) {
-      const doSpeak = () => {
-        synth.cancel();
-        const msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'id-ID';
-        msg.rate = 0.9;
-        if (onEndCallback) msg.onend = onEndCallback;
-        synth.speak(msg);
-        if (synth.paused) synth.resume();
+    // Fungsi utama untuk memutar TTS setelah bel selesai
+    const playSpeech = () => {
+      // Prioritas 1: Google TTS API (Format MP3 standar, sangat handal untuk Smart TV)
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
+      const speechAudio = new Audio(googleTtsUrl);
+      speechAudio.volume = 0.95;
+
+      speechAudio.onended = () => {
+        if (onEndCallback) onEndCallback();
+        setTimeout(playNextInQueue, 800); // Beri jeda 800ms sebelum antrean berikutnya
       };
 
-      // Cek apakah suara sudah siap
-      if (synth.getVoices().length > 0) {
-        doSpeak();
-      } else {
-        // Tunggu sebentar jika suara sedang loading
-        synth.onvoiceschanged = doSpeak;
-        setTimeout(doSpeak, 500); 
-      }
-    } else if (onEndCallback) {
-      onEndCallback();
+      speechAudio.onerror = () => {
+        console.warn("Gagal memutar Google TTS. Mencoba Fallback ke Web Speech API...");
+        
+        // Fallback 1: Web Speech API (Untuk Laptop/Desktop offline)
+        const synth = window.speechSynthesis;
+        if (synth) {
+          synth.cancel();
+          const msg = new SpeechSynthesisUtterance(text);
+          msg.lang = 'id-ID';
+          msg.rate = 0.9;
+          
+          msg.onend = () => {
+            if (onEndCallback) onEndCallback();
+            setTimeout(playNextInQueue, 800);
+          };
+
+          msg.onerror = () => {
+            console.error("Web Speech API juga gagal.");
+            if (onEndCallback) onEndCallback();
+            setTimeout(playNextInQueue, 500);
+          };
+
+          synth.speak(msg);
+          if (synth.paused) synth.resume();
+        } else {
+          // Fallback 2: Jika semuanya gagal, lanjut ke antrean berikutnya
+          if (onEndCallback) onEndCallback();
+          setTimeout(playNextInQueue, 500);
+        }
+      };
+
+      speechAudio.play().catch((err) => {
+        console.warn("Playback Google TTS diblokir atau gagal:", err);
+        speechAudio.onerror(); // Paksa masuk ke fallback
+      });
+    };
+
+    chime.onended = playSpeech;
+    chime.onerror = () => {
+      console.warn("Gagal memutar chime. Langsung memutar suara pembaca.");
+      playSpeech();
+    };
+
+    chime.play().catch((err) => {
+      console.warn("Playback chime diblokir, mencoba langsung suara pembaca:", err);
+      playSpeech();
+    });
+  };
+
+  // Fungsi speak yang memasukkan teks ke dalam antrean sekuensial
+  const speak = (text, type = 'default', onEndCallback = null) => {
+    const sounds = {
+      start: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',   // Bel Mulai
+      end10: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',   // Bel 10 Menit Akhir
+      next: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',    // Bel Jadwal Baru/Notif
+      active: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'   // Bel Aktif Sukses
+    };
+
+    const chimeUrl = sounds[type] || sounds.active;
+
+    // Masukkan ke antrean
+    audioQueue.current.push({ chimeUrl, text, onEndCallback });
+
+    // Jika mesin tidak sedang memutar suara, jalankan langsung
+    if (!isPlaying.current) {
+      playNextInQueue();
     }
   };
 
-  // Fungsi untuk membuka blokir suara
   const enableAudio = () => {
-    speak('Sistem suara aktif.', 'active');
+    speak('Sistem suara aktif dan siap digunakan.', 'active');
     setAudioEnabled(true);
   };
 

@@ -21,6 +21,32 @@ export default function DisplayPage() {
   // Pasang sistem suara
   const { audioEnabled, enableAudio, speak } = useAudioAnnouncer(schedules);
 
+  // Efek khusus untuk mendeteksi tombol remote TV atau klik di mana pun untuk membuka audio
+  useEffect(() => {
+    if (audioEnabled) return;
+
+    const handleGlobalInteraction = () => {
+      if (!audioEnabled) {
+        console.log("🔓 Audio diaktifkan via interaksi global!");
+        enableAudio();
+      }
+      removeListeners();
+    };
+
+    const removeListeners = () => {
+      window.removeEventListener('click', handleGlobalInteraction);
+      window.removeEventListener('keydown', handleGlobalInteraction);
+      window.removeEventListener('touchstart', handleGlobalInteraction);
+    };
+
+    // Dengarkan klik mouse, sentuhan layar, dan penekanan tombol keyboard/remote TV
+    window.addEventListener('click', handleGlobalInteraction);
+    window.addEventListener('keydown', handleGlobalInteraction);
+    window.addEventListener('touchstart', handleGlobalInteraction);
+
+    return removeListeners;
+  }, [audioEnabled, enableAudio]);
+
   // Effect Khusus Jam Penting (Indonesia Raya & Waktu Sholat)
   useEffect(() => {
     const checkTime = setInterval(() => {
