@@ -189,6 +189,12 @@
   line-height: 1;
 }
 
+.column-header-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
 .column-header-title {
   font-family: var(--font-accent);
   font-size: clamp(0.85rem, 1.4vw, 1.1rem);

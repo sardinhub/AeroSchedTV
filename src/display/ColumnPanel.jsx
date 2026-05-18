@@ -46,7 +46,11 @@ export default function ColumnPanel({ type, title, schedules, interval }) {
   return (
     <section className={`column-panel ${type}`}>
       <div className="column-header">
-        <span className="column-header-icon">{type === 'garuda' ? '✈️' : '🚀'}</span>
+        {type === 'garuda' ? (
+          <img src="/garuda.png" alt="Garuda Logo" className="column-header-logo" />
+        ) : (
+          <img src="/citilink.png" alt="Citilink Logo" className="column-header-logo" />
+        )}
         <h2 className="column-header-title">{title}</h2>
         <span className="column-header-badge">{displayDay}</span>
       </div>
