@@ -1,11 +1,139 @@
 import { useEffect, useState, useRef } from 'react';
 
+// Helper untuk menghasilkan suara bel berkualitas tinggi (chime) secara lokal dengan Web Audio API.
+// Menghilangkan ketergantungan pada file audio eksternal/mixkit yang sering diblokir CORS/403.
+const playSynthesizedChime = (type, audioCtx) => {
+  return new Promise((resolve) => {
+    try {
+      const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (!ctx) {
+        resolve();
+        return;
+      }
+      
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+      
+      if (type === 'start') {
+        // Bel Mulai: 3 nada naik cepat (C5 -> E5 -> G5)
+        const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+          
+          gain.gain.setValueAtTime(0, now + idx * 0.12);
+          gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.12 + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.5);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.start(now + idx * 0.12);
+          osc.stop(now + idx * 0.12 + 0.5);
+        });
+        setTimeout(resolve, 800);
+      } else if (type === 'end10') {
+        // Bel 10 Menit: 2 nada menurun bergantian (G5 -> E5 -> G5 -> E5)
+        const notes = [783.99, 659.25, 783.99, 659.25];
+        const times = [0, 0.18, 0.36, 0.54];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + times[idx]);
+          
+          gain.gain.setValueAtTime(0, now + times[idx]);
+          gain.gain.linearRampToValueAtTime(0.25, now + times[idx] + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + times[idx] + 0.35);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.start(now + times[idx]);
+          osc.stop(now + times[idx] + 0.35);
+        });
+        setTimeout(resolve, 1000);
+      } else if (type === 'next') {
+        // Bel Informasi/Notif: Arpeggio Cantik (C5 -> G5 -> C6)
+        const notes = [523.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          
+          gain.gain.setValueAtTime(0, now + idx * 0.08);
+          gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.08 + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.45);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.45);
+        });
+        setTimeout(resolve, 700);
+      } else {
+        // Tipe 'active' / Default: Suara Ding Dong Klasik yang Sangat Premium (E5 -> C5)
+        // Ding
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now); // E5
+        gain1.gain.setValueAtTime(0, now);
+        gain1.gain.linearRampToValueAtTime(0.3, now + 0.05);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.7);
+
+        // Dong
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(523.25, now + 0.3); // C5
+        gain2.gain.setValueAtTime(0, now + 0.3);
+        gain2.gain.linearRampToValueAtTime(0.3, now + 0.35);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.3);
+        osc2.stop(now + 1.0);
+
+        setTimeout(resolve, 1300);
+      }
+    } catch (err) {
+      console.warn("Gagal mensintesis bel Web Audio, langsung lanjut:", err);
+      resolve();
+    }
+  });
+};
+
 export function useAudioAnnouncer(schedules) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const announcedRef = useRef(new Set());
   const audioQueue = useRef([]);
   const isPlaying = useRef(false);
   const watchdogRef = useRef(null);
+  const isUnlocking = useRef(false);
+  const audioCtxRef = useRef(null);
+  const lastCheckedDayRef = useRef('');
+
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
 
   const clearWatchdog = () => {
     if (watchdogRef.current) {
@@ -36,7 +164,7 @@ export function useAudioAnnouncer(schedules) {
     startWatchdog();
 
     const currentItem = audioQueue.current.shift();
-    const { chimeUrl, text, onEndCallback } = currentItem;
+    const { chimeType, text, onEndCallback } = currentItem;
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
@@ -115,38 +243,21 @@ export function useAudioAnnouncer(schedules) {
       });
     };
 
-    // Jalankan Bel Chime menggunakan Objek Audio Baru yang segar (100% Kompatibel dengan Smart TV)
-    const chime = new Audio(chimeUrl);
-    chime.volume = 0.6;
-
-    chime.onended = () => {
-      playSpeech();
-    };
-
-    chime.onerror = () => {
-      console.warn("Gagal memutar chime. Langsung memutar suara pembaca.");
-      playSpeech();
-    };
-
-    chime.play().catch((err) => {
-      console.warn("Playback chime diblokir, mencoba langsung suara pembaca:", err);
-      playSpeech();
-    });
+    // Jalankan bel chime yang disintesis
+    playSynthesizedChime(chimeType, getAudioContext())
+      .then(() => {
+        playSpeech();
+      })
+      .catch((err) => {
+        console.warn("Sintesis bel gagal, langsung memutar suara:", err);
+        playSpeech();
+      });
   };
 
   // Fungsi speak yang memasukkan teks ke dalam antrean sekuensial
   const speak = (text, type = 'default', onEndCallback = null) => {
-    const sounds = {
-      start: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',   // Bel Mulai
-      end10: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',   // Bel 10 Menit Akhir
-      next: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',    // Bel Jadwal Baru/Notif
-      active: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'   // Bel Aktif Sukses
-    };
-
-    const chimeUrl = sounds[type] || sounds.active;
-
     // Masukkan ke antrean
-    audioQueue.current.push({ chimeUrl, text, onEndCallback });
+    audioQueue.current.push({ chimeType: type, text, onEndCallback });
 
     // Jika mesin tidak sedang memutar suara, jalankan langsung
     if (!isPlaying.current) {
@@ -154,27 +265,57 @@ export function useAudioAnnouncer(schedules) {
     }
   };
 
-  // Fungsi pembuka kunci suara sinkron (Wajib dipanggil di dalam event handler sinkron klik/remote)
+  // Fungsi pembuka kunci suara sinkron (Wajib dipanggil di dalam event handler klik/remote)
   const enableAudio = () => {
-    console.log("Attempting synchronous audio context unlock...");
+    if (audioEnabled || isUnlocking.current) return;
+    isUnlocking.current = true;
     
-    // Jalankan chime aktif secara sinkron langsung menggunakan objek audio baru
-    const unlockAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3');
-    unlockAudio.volume = 0.5;
+    console.log("🔊 Menjalankan pembukaan kunci audio sinkron...");
     
-    unlockAudio.play()
+    let webAudioUnlocked = false;
+    let html5AudioUnlocked = false;
+    
+    // 1. Inisialisasi & Resume Web Audio API
+    const ctx = getAudioContext();
+    const resumePromise = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
+    
+    resumePromise
       .then(() => {
-        console.log("🔊 TV Browser Audio Context successfully unlocked synchronously!");
-        setAudioEnabled(true);
-        // Mainkan teks sambutan setelah berhasil un-mute
-        setTimeout(() => {
-          speak('Sistem suara aktif dan siap digunakan.', 'active');
-        }, 800);
+        console.log("🔊 Web Audio Context berhasil di-resume!");
+        webAudioUnlocked = true;
+        // Mainkan bel selamat datang menggunakan synthesizer lokal
+        return playSynthesizedChime('active', ctx);
+      })
+      .then(() => {
+        console.log("🔊 Bel sambutan berhasil diputar via Web Audio!");
       })
       .catch(err => {
-        console.error("Synchronous unlock failed:", err);
-        // Fallback jika TV masih protektif, tetap tandai true agar user bisa melanjutkan interaksi
+        console.warn("⚠️ Web Audio unlock warning:", err);
+      });
+
+    // 2. Buka kunci HTML5 Audio secara bersamaan dengan base64 audio hening
+    // Gunakan WAV 1-detik hening base64 yang valid dan sangat ringan
+    const silentWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    const silentAudio = new Audio(silentWav);
+    silentAudio.volume = 0.01;
+    
+    silentAudio.play()
+      .then(() => {
+        console.log("🔊 HTML5 Audio berhasil dibuka kuncinya secara sinkron!");
+        html5AudioUnlocked = true;
         setAudioEnabled(true);
+        isUnlocking.current = false;
+        
+        // Setelah sukses, jadwalkan pesan suara sambutan
+        setTimeout(() => {
+          speak('Sistem suara aktif dan siap digunakan.', 'active');
+        }, 1200);
+      })
+      .catch(err => {
+        console.error("❌ HTML5 Audio unlock failed:", err);
+        // Jika keduanya gagal atau salah satu diblokir, kita tetap set true sebagai fallback
+        setAudioEnabled(true);
+        isUnlocking.current = false;
       });
   };
 
@@ -185,6 +326,13 @@ export function useAudioAnnouncer(schedules) {
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes();
       const currentDay = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Makassar' }).format(now).toLowerCase();
+
+      // Jika hari telah berganti, reset semua riwayat pengumuman agar hari baru bisa diumumkan
+      if (lastCheckedDayRef.current !== currentDay) {
+        console.log(`📅 Hari berganti dari "${lastCheckedDayRef.current}" ke "${currentDay}". Meriset riwayat pengumuman...`);
+        announcedRef.current.clear();
+        lastCheckedDayRef.current = currentDay;
+      }
 
       schedules.forEach(s => {
         if (s.day_of_week?.toLowerCase() !== currentDay) return;
