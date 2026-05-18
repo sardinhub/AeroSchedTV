@@ -164,7 +164,7 @@ export function useAudioAnnouncer(schedules) {
     startWatchdog();
 
     const currentItem = audioQueue.current.shift();
-    const { chimeType, text, onEndCallback } = currentItem;
+    const { chimeType, text, onEndCallback, delayAfter = 2000 } = currentItem;
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
@@ -179,7 +179,7 @@ export function useAudioAnnouncer(schedules) {
       voiceAudio.onended = () => {
         clearWatchdog();
         if (onEndCallback) onEndCallback();
-        setTimeout(playNextInQueue, 2000); // Jeda 2 detik sebelum antrean berikutnya
+        setTimeout(playNextInQueue, delayAfter); 
       };
 
       const handleFallback1 = () => {
@@ -194,7 +194,7 @@ export function useAudioAnnouncer(schedules) {
         fallbackAudio.onended = () => {
           clearWatchdog();
           if (onEndCallback) onEndCallback();
-          setTimeout(playNextInQueue, 2000);
+          setTimeout(playNextInQueue, delayAfter);
         };
 
         const handleFallback2 = () => {
@@ -213,13 +213,13 @@ export function useAudioAnnouncer(schedules) {
               
               msg.onend = () => {
                 if (onEndCallback) onEndCallback();
-                setTimeout(playNextInQueue, 2000);
+                setTimeout(playNextInQueue, delayAfter);
               };
 
               msg.onerror = () => {
                 console.error("Web Speech API juga gagal.");
                 if (onEndCallback) onEndCallback();
-                setTimeout(playNextInQueue, 2000);
+                setTimeout(playNextInQueue, delayAfter);
               };
 
               synth.speak(msg);
@@ -227,11 +227,11 @@ export function useAudioAnnouncer(schedules) {
             } catch (err) {
               console.error("SpeechSynthesis error caught:", err);
               if (onEndCallback) onEndCallback();
-              setTimeout(playNextInQueue, 2000);
+              setTimeout(playNextInQueue, delayAfter);
             }
           } else {
             if (onEndCallback) onEndCallback();
-            setTimeout(playNextInQueue, 2000);
+            setTimeout(playNextInQueue, delayAfter);
           }
         };
 
@@ -255,9 +255,9 @@ export function useAudioAnnouncer(schedules) {
   };
 
   // Fungsi speak yang memasukkan teks ke dalam antrean sekuensial
-  const speak = (text, type = 'default', onEndCallback = null) => {
+  const speak = (text, type = 'default', onEndCallback = null, delayAfter = 2000) => {
     // Masukkan ke antrean
-    audioQueue.current.push({ chimeType: type, text, onEndCallback });
+    audioQueue.current.push({ chimeType: type, text, onEndCallback, delayAfter });
 
     // Jika mesin tidak sedang memutar suara, jalankan langsung
     if (!isPlaying.current) {
@@ -378,19 +378,20 @@ export function useAudioAnnouncer(schedules) {
         const lecturer = s.lecturer?.name || 'Dosen pengajar';
         const course = s.course_name || 'mata kuliah';
         const kelas = s.class_type === 'garuda' ? 'Kelas Garuda' : 'Kelas Citilink';
+        const delayAfter = s.class_type === 'garuda' ? 10000 : 2000;
 
         if (currentTime === startTime && !announcedRef.current.has(`${s.id}-start`)) {
-          speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`, 'start');
+          speak(`Perhatian. Jadwal ${course} oleh ${lecturer} untuk ${kelas}, telah dimulai.`, 'start', null, delayAfter);
           announcedRef.current.add(`${s.id}-start`);
         }
         
         if (currentTime === endTime - 10 && !announcedRef.current.has(`${s.id}-end10`)) {
-          speak(`Perhatian. Waktu mengajar untuk ${course} di ${kelas}, akan berakhir dalam 10 menit.`, 'end10');
+          speak(`Perhatian. Waktu mengajar untuk ${course} di ${kelas}, akan berakhir dalam 10 menit.`, 'end10', null, delayAfter);
           announcedRef.current.add(`${s.id}-end10`);
         }
 
         if (currentTime === startTime - 5 && !announcedRef.current.has(`${s.id}-next5`)) {
-          speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`, 'next');
+          speak(`Informasi jadwal berikutnya. ${course} oleh ${lecturer} untuk ${kelas}, akan dimulai dalam 5 menit.`, 'next', null, delayAfter);
           announcedRef.current.add(`${s.id}-next5`);
         }
       });
