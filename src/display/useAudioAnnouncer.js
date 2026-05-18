@@ -168,7 +168,10 @@ export function useAudioAnnouncer(schedules) {
 
     // Fungsi utama untuk memutar TTS setelah bel selesai
     const playSpeech = () => {
-      // Prioritas 1: StreamElements Amazon Polly (Sangat natural, bebas CORS/Referrer Block!)
+      let fallback1Triggered = false;
+      let fallback2Triggered = false;
+
+      // Prioritas 1: StreamElements Amazon Polly
       const streamElementsUrl = `https://api.streamelements.com/api/v2/speech?voice=Indah&text=${encodeURIComponent(text)}`;
       const voiceAudio = new Audio(streamElementsUrl);
       voiceAudio.volume = 0.95;
@@ -179,10 +182,11 @@ export function useAudioAnnouncer(schedules) {
         setTimeout(playNextInQueue, 2000); // Jeda 2 detik sebelum antrean berikutnya
       };
 
-      voiceAudio.onerror = (e) => {
-        console.warn("Gagal memutar StreamElements. Mencoba Fallback 1: Google TTS...", e);
+      const handleFallback1 = () => {
+        if (fallback1Triggered) return;
+        fallback1Triggered = true;
+        console.warn("Gagal memutar StreamElements. Mencoba Fallback 1: Google TTS...");
         
-        // Fallback 1: Google TTS API (Format MP3 standar)
         const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=id-ID&client=tw-ob&q=${encodeURIComponent(text)}`;
         const fallbackAudio = new Audio(googleTtsUrl);
         fallbackAudio.volume = 0.95;
@@ -190,14 +194,15 @@ export function useAudioAnnouncer(schedules) {
         fallbackAudio.onended = () => {
           clearWatchdog();
           if (onEndCallback) onEndCallback();
-          setTimeout(playNextInQueue, 2000); // Jeda 2 detik
+          setTimeout(playNextInQueue, 2000);
         };
 
-        fallbackAudio.onerror = () => {
+        const handleFallback2 = () => {
+          if (fallback2Triggered) return;
+          fallback2Triggered = true;
           console.warn("Google TTS juga gagal. Mencoba Fallback 2: Web Speech API...");
           clearWatchdog();
 
-          // Fallback 2: Web Speech API (Untuk Laptop/Desktop offline)
           const synth = window.speechSynthesis;
           if (synth) {
             try {
@@ -208,7 +213,7 @@ export function useAudioAnnouncer(schedules) {
               
               msg.onend = () => {
                 if (onEndCallback) onEndCallback();
-                setTimeout(playNextInQueue, 2000); // Jeda 2 detik
+                setTimeout(playNextInQueue, 2000);
               };
 
               msg.onerror = () => {
@@ -225,22 +230,17 @@ export function useAudioAnnouncer(schedules) {
               setTimeout(playNextInQueue, 2000);
             }
           } else {
-            // Fallback 3: Jika semuanya gagal, lanjut ke antrean berikutnya
             if (onEndCallback) onEndCallback();
             setTimeout(playNextInQueue, 2000);
           }
         };
 
-        fallbackAudio.play().catch((err) => {
-          console.warn("Playback Google TTS diblokir:", err);
-          fallbackAudio.onerror();
-        });
+        fallbackAudio.onerror = handleFallback2;
+        fallbackAudio.play().catch(() => handleFallback2());
       };
 
-      voiceAudio.play().catch((err) => {
-        console.warn("Playback StreamElements diblokir:", err);
-        voiceAudio.onerror(); // Paksa masuk ke fallback
-      });
+      voiceAudio.onerror = handleFallback1;
+      voiceAudio.play().catch(() => handleFallback1());
     };
 
     // Jalankan bel chime yang disintesis
