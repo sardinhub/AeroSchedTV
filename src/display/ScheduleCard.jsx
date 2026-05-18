@@ -7,9 +7,21 @@ export default function ScheduleCard({ schedule }) {
     const updateStatus = () => {
       const now = new Date();
       // Konversi waktu sekarang ke total menit hari ini (WITA)
-      // Jika browser di TV sudah diset ke WITA, ini akan akurat
-      const currentH = now.getHours();
-      const currentM = now.getMinutes();
+      let currentH = now.getHours();
+      let currentM = now.getMinutes();
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Makassar',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: false
+        }).formatToParts(now);
+        currentH = Number(parts.find(p => p.type === 'hour').value);
+        currentM = Number(parts.find(p => p.type === 'minute').value);
+      } catch (err) {
+        console.warn("Gagal mendapatkan WITA time di ScheduleCard, menggunakan waktu lokal:", err);
+      }
+
       const currentTime = currentH * 60 + currentM;
 
       // Ambil waktu mulai & selesai dari jadwal (format HH:mm:ss)

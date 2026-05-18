@@ -64,13 +64,28 @@ export default function DisplayPage() {
   useEffect(() => {
     const checkTime = setInterval(() => {
       const now = new Date();
-      const h = now.getHours().toString().padStart(2, '0');
-      const m = now.getMinutes().toString().padStart(2, '0');
+      
+      // Ambil waktu tepat dalam zona WITA (Makassar)
+      let hStr = now.getHours().toString().padStart(2, '0');
+      let mStr = now.getMinutes().toString().padStart(2, '0');
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Makassar',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: false
+        }).formatToParts(now);
+        hStr = parts.find(p => p.type === 'hour').value.padStart(2, '0');
+        mStr = parts.find(p => p.type === 'minute').value.padStart(2, '0');
+      } catch (err) {
+        console.warn("Gagal mendapatkan WITA time di DisplayPage:", err);
+      }
+      
       const s = now.getSeconds();
-      const currentTimeStr = `${h}:${m}`;
+      const currentTimeStr = `${hStr}:${mStr}`;
 
-      // Reset trigger tiap pergantian hari (jam 00:00)
-      if (h === '00' && m === '00') {
+      // Reset trigger tiap pergantian hari (jam 00:00 WITA)
+      if (hStr === '00' && mStr === '00') {
         indonesiaRayaTriggered.current = false;
         sholatTriggered.current.clear();
       }
@@ -79,12 +94,12 @@ export default function DisplayPage() {
       if (currentTimeStr === (settings.indonesia_raya_time || '21:48') && s === 0 && !indonesiaRayaTriggered.current) {
         indonesiaRayaTriggered.current = true;
         if (audioEnabled) {
-           speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", 'next', () => {
-             setShowIndonesiaRaya(true);
-           });
-           setTimeout(() => setShowIndonesiaRaya(true), 12000);
+          // Putar pengumuman suara terlebih dahulu, setelah SELESAI baru jalankan videonya
+          speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", 'next', () => {
+            setShowIndonesiaRaya(true);
+          });
         } else {
-           setShowIndonesiaRaya(true);
+          setShowIndonesiaRaya(true);
         }
       }
 
