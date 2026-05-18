@@ -148,7 +148,7 @@ export function useAudioAnnouncer(schedules) {
       console.warn("⚠️ Watchdog triggered: Audio playback took too long. Force continuing queue...");
       isPlaying.current = false;
       playNextInQueue();
-    }, 12000); // 12 detik batas maksimum per pengumuman
+    }, 30000); // 30 detik batas maksimum per pengumuman
   };
 
   // Fungsi untuk memutar antrean audio secara berurutan (Sequential Queue)
@@ -176,7 +176,7 @@ export function useAudioAnnouncer(schedules) {
       voiceAudio.onended = () => {
         clearWatchdog();
         if (onEndCallback) onEndCallback();
-        setTimeout(playNextInQueue, 800); // Beri jeda sebelum antrean berikutnya
+        setTimeout(playNextInQueue, 2000); // Jeda 2 detik sebelum antrean berikutnya
       };
 
       voiceAudio.onerror = (e) => {
@@ -190,7 +190,7 @@ export function useAudioAnnouncer(schedules) {
         fallbackAudio.onended = () => {
           clearWatchdog();
           if (onEndCallback) onEndCallback();
-          setTimeout(playNextInQueue, 800);
+          setTimeout(playNextInQueue, 2000); // Jeda 2 detik
         };
 
         fallbackAudio.onerror = () => {
@@ -208,13 +208,13 @@ export function useAudioAnnouncer(schedules) {
               
               msg.onend = () => {
                 if (onEndCallback) onEndCallback();
-                setTimeout(playNextInQueue, 800);
+                setTimeout(playNextInQueue, 2000); // Jeda 2 detik
               };
 
               msg.onerror = () => {
                 console.error("Web Speech API juga gagal.");
                 if (onEndCallback) onEndCallback();
-                setTimeout(playNextInQueue, 500);
+                setTimeout(playNextInQueue, 2000);
               };
 
               synth.speak(msg);
@@ -222,12 +222,12 @@ export function useAudioAnnouncer(schedules) {
             } catch (err) {
               console.error("SpeechSynthesis error caught:", err);
               if (onEndCallback) onEndCallback();
-              setTimeout(playNextInQueue, 500);
+              setTimeout(playNextInQueue, 2000);
             }
           } else {
             // Fallback 3: Jika semuanya gagal, lanjut ke antrean berikutnya
             if (onEndCallback) onEndCallback();
-            setTimeout(playNextInQueue, 500);
+            setTimeout(playNextInQueue, 2000);
           }
         };
 
