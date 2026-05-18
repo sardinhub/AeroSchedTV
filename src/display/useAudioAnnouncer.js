@@ -324,7 +324,29 @@ export function useAudioAnnouncer(schedules) {
 
     const checkSchedules = () => {
       const now = new Date();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
+      
+      // Ambil waktu tepat dalam zona WITA (Makassar)
+      let currentH = now.getHours();
+      let currentM = now.getMinutes();
+      try {
+        const witaString = now.toLocaleString('en-US', {
+          timeZone: 'Asia/Makassar',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const match = witaString.match(/(\d{1,2})[\s.:\-]+(\d{2})/);
+        if (match) {
+          let hVal = Number(match[1]);
+          if (hVal === 24) hVal = 0; // Bersihkan quirk midnight
+          currentH = hVal;
+          currentM = Number(match[2]);
+        }
+      } catch (err) {
+        console.warn("Gagal mendapatkan WITA time di checkSchedules:", err);
+      }
+
+      const currentTime = currentH * 60 + currentM;
       const currentDay = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Makassar' }).format(now).toLowerCase();
 
       // Jika hari telah berganti, reset semua riwayat pengumuman agar hari baru bisa diumumkan

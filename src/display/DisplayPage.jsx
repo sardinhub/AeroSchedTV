@@ -69,19 +69,23 @@ export default function DisplayPage() {
       let hStr = now.getHours().toString().padStart(2, '0');
       let mStr = now.getMinutes().toString().padStart(2, '0');
       try {
-        const parts = new Intl.DateTimeFormat('en-US', {
+        const witaString = now.toLocaleString('en-US', {
           timeZone: 'Asia/Makassar',
-          hour: 'numeric',
-          minute: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
           hour12: false
-        }).formatToParts(now);
-        hStr = parts.find(p => p.type === 'hour').value.padStart(2, '0');
-        mStr = parts.find(p => p.type === 'minute').value.padStart(2, '0');
+        });
+        const match = witaString.match(/(\d{1,2})[\s.:\-]+(\d{2})/);
+        if (match) {
+          let hVal = Number(match[1]);
+          if (hVal === 24) hVal = 0; // Bersihkan quirk midnight
+          hStr = hVal.toString().padStart(2, '0');
+          mStr = match[2];
+        }
       } catch (err) {
         console.warn("Gagal mendapatkan WITA time di DisplayPage:", err);
       }
       
-      const s = now.getSeconds();
       const currentTimeStr = `${hStr}:${mStr}`;
 
       // Reset trigger tiap pergantian hari (jam 00:00 WITA)
@@ -91,7 +95,7 @@ export default function DisplayPage() {
       }
 
       // 1. PICU INDONESIA RAYA (Berdasarkan Pengaturan)
-      if (currentTimeStr === (settings.indonesia_raya_time || '21:48') && s === 0 && !indonesiaRayaTriggered.current) {
+      if (currentTimeStr === (settings.indonesia_raya_time || '21:48') && !indonesiaRayaTriggered.current) {
         indonesiaRayaTriggered.current = true;
         if (audioEnabled) {
           // Putar pengumuman suara terlebih dahulu, setelah SELESAI baru jalankan videonya
@@ -104,7 +108,7 @@ export default function DisplayPage() {
       }
 
       // 2. PICU DZUHUR (Berdasarkan Pengaturan)
-      if (currentTimeStr === (settings.sholat_dzuhur_time || '12:10') && s === 0 && !sholatTriggered.current.has('dzuhur')) {
+      if (currentTimeStr === (settings.sholat_dzuhur_time || '12:10') && !sholatTriggered.current.has('dzuhur')) {
         sholatTriggered.current.add('dzuhur');
         if (audioEnabled) {
           speak("DISAMPAIKAN KEPADA KAUM MUSLIMIN DAN MUSLIMAT BAHWA WAKTU SHOLAT DZUHUR TELAH TIBA ... TERIMA KASIH", 'active');
@@ -112,7 +116,7 @@ export default function DisplayPage() {
       }
 
       // 3. PICU ASHAR (Berdasarkan Pengaturan)
-      if (currentTimeStr === (settings.sholat_ashar_time || '15:20') && s === 0 && !sholatTriggered.current.has('ashar')) {
+      if (currentTimeStr === (settings.sholat_ashar_time || '15:20') && !sholatTriggered.current.has('ashar')) {
         sholatTriggered.current.add('ashar');
         if (audioEnabled) {
           speak("DISAMPAIKAN KEPADA KAUM MUSLIMIN DAN MUSLIMAT BAHWA WAKTU SHOLAT ASHAR TELAH TIBA ... TERIMA KASIH", 'active');

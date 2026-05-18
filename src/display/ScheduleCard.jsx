@@ -10,14 +10,19 @@ export default function ScheduleCard({ schedule }) {
       let currentH = now.getHours();
       let currentM = now.getMinutes();
       try {
-        const parts = new Intl.DateTimeFormat('en-US', {
+        const witaString = now.toLocaleString('en-US', {
           timeZone: 'Asia/Makassar',
-          hour: 'numeric',
-          minute: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
           hour12: false
-        }).formatToParts(now);
-        currentH = Number(parts.find(p => p.type === 'hour').value);
-        currentM = Number(parts.find(p => p.type === 'minute').value);
+        });
+        const match = witaString.match(/(\d{1,2})[\s.:\-]+(\d{2})/);
+        if (match) {
+          let hVal = Number(match[1]);
+          if (hVal === 24) hVal = 0; // Bersihkan quirk midnight
+          currentH = hVal;
+          currentM = Number(match[2]);
+        }
       } catch (err) {
         console.warn("Gagal mendapatkan WITA time di ScheduleCard, menggunakan waktu lokal:", err);
       }
