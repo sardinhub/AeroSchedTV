@@ -98,12 +98,16 @@ export default function DisplayPage() {
       if (currentTimeStr === (settings.indonesia_raya_time || '21:48') && !indonesiaRayaTriggered.current) {
         indonesiaRayaTriggered.current = true;
         if (audioEnabled) {
-          // Putar pengumuman suara terlebih dahulu, setelah SELESAI baru jalankan videonya
+          // Putar pengumuman suara terlebih dahulu, setelah SELESAI tunggu 7 detik baru jalankan videonya
           speak("Dalam lima menit, mari sejenak kita berdiri sambil menyimak dan menyanyikan, lagu kebangsaan Indonesia Raya.", 'next', () => {
-            setShowIndonesiaRaya(true);
+            setTimeout(() => {
+              setShowIndonesiaRaya(true);
+            }, 7000);
           });
         } else {
-          setShowIndonesiaRaya(true);
+          setTimeout(() => {
+            setShowIndonesiaRaya(true);
+          }, 7000);
         }
       }
 
