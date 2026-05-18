@@ -356,7 +356,16 @@ export function useAudioAnnouncer(schedules) {
         lastCheckedDayRef.current = currentDay;
       }
 
-      schedules.forEach(s => {
+      // Urutkan jadwal agar Garuda diproses (dan diumumkan) lebih dulu jika ada jadwal bersamaan
+      const sortedSchedules = [...schedules].sort((a, b) => {
+        const aClass = a.class_type?.toLowerCase() || '';
+        const bClass = b.class_type?.toLowerCase() || '';
+        if (aClass === 'garuda' && bClass !== 'garuda') return -1;
+        if (bClass === 'garuda' && aClass !== 'garuda') return 1;
+        return 0;
+      });
+
+      sortedSchedules.forEach(s => {
         if (s.day_of_week?.toLowerCase() !== currentDay) return;
         if (!s.start_time || !s.end_time) return;
 
